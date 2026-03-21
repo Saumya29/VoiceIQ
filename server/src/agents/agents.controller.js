@@ -1,0 +1,71 @@
+import HighLevelApi from '../services/highlevel-api.js';
+import InstallationsDao from '../auth/installations.dao.js';
+import { DEMO_AGENTS } from './demo-agents.js';
+
+// Map HighLevel API fields to our app's convention
+function normalizeAgent(raw) {
+  return {
+    id: raw.id,
+    locationId: raw.locationId,
+    name: raw.agentName || raw.name || 'Unnamed Agent',
+    businessName: raw.businessName || '',
+    systemPrompt: raw.agentPrompt || raw.systemPrompt || '',
+    welcomeMessage: raw.welcomeMessage || '',
+    phone: raw.inboundNumber || null,
+    voiceId: raw.voiceId || null,
+    language: raw.language || 'en-US',
+    maxCallDuration: raw.maxCallDuration || 900,
+    actions: raw.actions || [],
+    status: raw.inboundNumber ? 'active' : 'configured',
+  };
+}
+
+const AgentsController = {
+  async list(req, res, next) {
+    try {
+      const { locationId } = req.query;
+
+      if (!locationId) {
+        return res.status(400).json({ error: 'locationId query parameter is required' });
+      }
+
+      const installation = InstallationsDao.getByLocationId(locationId);
+      if (!installation) {
+        return res.json({ agents: DEMO_AGENTS, demo: true });
+      }
+
+      const data = await HighLevelApi.listAgents(locationId);
+      const agents = (data.agents || []).map(normalizeAgent);
+      res.json({ agents });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getById(req, res, next) {
+    try {
+      const { locationId } = req.query;
+      const { agentId } = req.params;
+
+      if (!locationId) {
+        return res.status(400).json({ error: 'locationId query parameter is required' });
+      }
+
+      const installation = InstallationsDao.getByLocationId(locationId);
+      if (!installation) {
+        const agent = DEMO_AGENTS.find(a => a.id === agentId);
+        if (!agent) {
+          return res.status(404).json({ error: 'Agent not found' });
+        }
+        return res.json({ agent, demo: true });
+      }
+
+      const data = await HighLevelApi.getAgent(locationId, agentId);
+      res.json({ agent: normalizeAgent(data) });
+    } catch (error) {
+      next(error);
+    }
+  },
+};
+
+export default AgentsController;

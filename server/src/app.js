@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import authRoutes from './auth/auth.routes.js';
+import agentsRoutes from './agents/agents.routes.js';
 
 const app = express();
 
@@ -15,6 +17,10 @@ app.use(cookieParser());
 app.get('/api/v1/health', (req, res) => {
   res.json({ success: true, data: { status: 'ok' } });
 });
+
+// Routes
+app.use('/auth', authRoutes);
+app.use('/api/v1/agents', agentsRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {
