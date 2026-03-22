@@ -4,9 +4,13 @@ import OpenAIClient from '../services/openai-client.js';
 import { buildAnalyzePrompt } from '../agents/analyze-prompt.js';
 import { DEMO_AGENTS } from '../agents/demo-agents.js';
 import TestGenerator from './test-generator.js';
+import TestExecutor from './test-executor.js';
 import TestRunDao from './test-run.dao.js';
 import TestCaseDao from './test-case.dao.js';
 import TestResultDao from './test-result.dao.js';
+
+// In-memory SSE connections keyed by runId
+const sseClients = new Map();
 
 // Shared helper to resolve agent (real or demo)
 function normalizeAgent(raw) {
@@ -115,6 +119,67 @@ const TestsController = {
       });
 
       res.json({ testCase: updated });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // SSE endpoint — client connects here to receive real-time events
+  stream(req, res) {
+    const { runId } = req.params;
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+
+    // Store this connection
+    if (!sseClients.has(runId)) {
+      sseClients.set(runId, []);
+    }
+    sseClients.get(runId).push(res);
+
+    // Remove on disconnect
+    req.on('close', () => {
+      const clients = sseClients.get(runId) || [];
+      sseClients.set(runId, clients.filter(c => c !== res));
+    });
+  },
+
+  // Trigger test execution
+  async execute(req, res, next) {
+    try {
+      const { runId } = req.params;
+      const { locationId } = req.body;
+
+      const run = TestRunDao.getById(runId);
+      if (!run) {
+        return res.status(404).json({ error: 'Test run not found' });
+      }
+
+      if (run.status === 'running') {
+        return res.status(400).json({ error: 'Test run is already executing' });
+      }
+
+      // Resolve the agent to get system prompt
+      const agent = await resolveAgent(locationId || run.location_id, run.agent_id);
+
+      // Respond immediately, execution runs in background
+      res.json({ message: 'Execution started', runId });
+
+      // Emit SSE events to all connected clients for this run
+      const emit = (eventName, data) => {
+        const clients = sseClients.get(runId) || [];
+        const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+        clients.forEach(client => client.write(payload));
+      };
+
+      // Run execution (async, doesn't block response)
+      TestExecutor.execute(runId, agent.systemPrompt, emit).catch(err => {
+        console.error('Execution error:', err);
+        emit('error', { message: err.message });
+      });
     } catch (error) {
       next(error);
     }
