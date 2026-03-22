@@ -71,6 +71,7 @@ const HighLevelApi = {
     );
 
     const response = await client.get(`/voice-ai/agents/${agentId}`, {
+      params: { locationId },
       headers: getAuthHeaders(installation.access_token),
     });
 

@@ -16,7 +16,7 @@
         v-for="agent in agents"
         :key="agent.id"
         class="agent-card"
-        @click="$router.push(`/agents/${agent.id}`)"
+        @click="$router.push({ path: `/agents/${agent.id}`, query: { locationId } })"
       >
         <div class="agent-card-header">
           <h3>{{ agent.name }}</h3>
