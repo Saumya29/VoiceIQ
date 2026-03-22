@@ -9,6 +9,35 @@
     <div v-else-if="error" class="error">{{ error }}</div>
 
     <template v-else>
+      <!-- Before/After Comparison (shown when this is a re-test run) -->
+      <div v-if="parentRun" class="before-after">
+        <h2>Before / After Comparison</h2>
+        <div class="ba-grid">
+          <div class="ba-card before">
+            <span class="ba-label">Before (Original)</span>
+            <span class="ba-score" :class="baScoreClass(parentRun.overall_score)">{{ parentRun.overall_score ?? '—' }}%</span>
+            <div class="ba-stats">
+              <span class="pass">{{ parentRun.passed }} pass</span>
+              <span class="partial">{{ parentRun.partial }} partial</span>
+              <span class="fail">{{ parentRun.failed }} fail</span>
+            </div>
+          </div>
+          <div class="ba-arrow">→</div>
+          <div class="ba-card after">
+            <span class="ba-label">After (Optimized)</span>
+            <span class="ba-score" :class="baScoreClass(run.overall_score)">{{ run.overall_score ?? '—' }}%</span>
+            <div class="ba-stats">
+              <span class="pass">{{ run.passed }} pass</span>
+              <span class="partial">{{ run.partial }} partial</span>
+              <span class="fail">{{ run.failed }} fail</span>
+            </div>
+          </div>
+          <div class="ba-delta" :class="deltaClass">
+            {{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}% {{ scoreDelta > 0 ? 'improvement' : scoreDelta < 0 ? 'regression' : 'no change' }}
+          </div>
+        </div>
+      </div>
+
       <!-- KPI Dashboard -->
       <div class="kpi-grid">
         <div class="kpi-card">
@@ -85,6 +114,7 @@ const run = ref({});
 const testCases = ref([]);
 const results = ref([]);
 const expanded = ref(null);
+const parentRun = ref(null);
 
 const scoreClass = computed(() => {
   const s = run.value.overall_score;
@@ -93,12 +123,39 @@ const scoreClass = computed(() => {
   return 'fail';
 });
 
+const scoreDelta = computed(() => {
+  if (!parentRun.value || run.value.overall_score == null || parentRun.value.overall_score == null) return 0;
+  return Math.round((run.value.overall_score - parentRun.value.overall_score) * 10) / 10;
+});
+
+const deltaClass = computed(() => {
+  if (scoreDelta.value > 0) return 'positive';
+  if (scoreDelta.value < 0) return 'negative';
+  return 'neutral';
+});
+
+function baScoreClass(score) {
+  if (score >= 80) return 'pass';
+  if (score >= 50) return 'partial';
+  return 'fail';
+}
+
 onMounted(async () => {
   try {
     const res = await axios.get(`/api/v1/tests/runs/${runId}`);
     run.value = res.data.run;
     testCases.value = res.data.testCases;
     results.value = res.data.results;
+
+    // If this is a re-test, fetch the parent run for comparison
+    if (run.value.parent_run_id) {
+      try {
+        const parentRes = await axios.get(`/api/v1/tests/runs/${run.value.parent_run_id}`);
+        parentRun.value = parentRes.data.run;
+      } catch (_) {
+        // Parent run may have been deleted, ignore
+      }
+    }
   } catch (err) {
     error.value = 'Failed to load results.';
   } finally {
@@ -334,4 +391,88 @@ async function generateOptimization() {
 }
 
 .btn-primary:hover { background: #2563eb; }
+
+/* Before/After Comparison */
+.before-after {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+}
+
+.before-after h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 16px 0;
+}
+
+.ba-grid {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ba-card {
+  flex: 1;
+  min-width: 180px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid #e5e7eb;
+}
+
+.ba-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.ba-score {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.ba-score.pass { color: #059669; }
+.ba-score.partial { color: #d97706; }
+.ba-score.fail { color: #dc2626; }
+
+.ba-stats {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.ba-stats .pass { color: #059669; }
+.ba-stats .partial { color: #d97706; }
+.ba-stats .fail { color: #dc2626; }
+
+.ba-arrow {
+  font-size: 24px;
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.ba-delta {
+  width: 100%;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.ba-delta.positive { color: #059669; background: #d1fae5; }
+.ba-delta.negative { color: #dc2626; background: #fee2e2; }
+.ba-delta.neutral { color: #6b7280; background: #f3f4f6; }
 </style>

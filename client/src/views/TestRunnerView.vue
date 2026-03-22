@@ -5,6 +5,9 @@
       <h1>Test Runner</h1>
     </header>
 
+    <!-- Retest loading -->
+    <div v-if="phase === 'loading'" class="loading">Creating re-test run...</div>
+
     <!-- Phase 1: Config -->
     <div v-if="phase === 'config'" class="phase-config">
       <h2>Configure Test Generation</h2>
@@ -140,7 +143,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 
@@ -148,10 +151,25 @@ const route = useRoute();
 const router = useRouter();
 const agentId = route.params.agentId;
 const locationId = route.query.locationId || new URLSearchParams(window.location.search).get('locationId') || 'demo';
+const retestRunId = route.query.retestRunId || null;
 
-const phase = ref('config');
+const phase = ref(retestRunId ? 'loading' : 'config');
 const generating = ref(false);
 const generateError = ref('');
+
+// If retestRunId is set, create a new run with same test cases and go to review
+onMounted(async () => {
+  if (!retestRunId) return;
+  try {
+    const res = await axios.post(`/api/v1/tests/runs/${retestRunId}/retest`, { locationId });
+    testRun.value = res.data.testRun;
+    testCases.value = res.data.testCases;
+    phase.value = 'review';
+  } catch (err) {
+    generateError.value = 'Failed to create re-test: ' + (err.response?.data?.error || err.message);
+    phase.value = 'config';
+  }
+});
 
 const selectedCategories = ref(['happy_path', 'edge_case', 'adversarial']);
 const casesPerCategory = ref(2);
@@ -575,5 +593,12 @@ h2 {
   color: #dc2626;
   font-size: 14px;
   margin-top: 12px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 0;
+  color: #6b7280;
+  font-size: 15px;
 }
 </style>
