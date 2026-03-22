@@ -84,6 +84,7 @@ const HighLevelApi = {
     );
 
     const response = await client.patch(`/voice-ai/agents/${agentId}`, updates, {
+      params: { locationId },
       headers: getAuthHeaders(installation.access_token),
     });
 
