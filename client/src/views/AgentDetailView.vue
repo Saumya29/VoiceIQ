@@ -134,7 +134,7 @@
           </div>
 
           <div class="analysis-actions">
-            <button class="btn-primary" @click="$router.push(`/agents/${agentId}/test`)">
+            <button class="btn-primary" @click="$router.push({ path: `/agents/${agentId}/test`, query: { locationId } })">
               Generate Tests →
             </button>
             <button class="btn-secondary" @click="runAnalysis">
