@@ -4,9 +4,9 @@ export const DEMO_AGENTS = [
     name: 'Bella - Appointment Booking Agent',
     status: 'active',
     phone: '+1 (555) 123-4567',
-    systemPrompt: `You are Bella, a friendly and professional appointment booking assistant for Sunrise Dental Clinic.
+    systemPrompt: `You are Bella, a friendly appointment booking assistant for Sunrise Dental Clinic.
 
-Your primary goals:
+Your goals:
 1. Help callers book dental appointments
 2. Collect required information: full name, phone number, preferred date and time
 3. Confirm appointment details before ending the call
@@ -26,6 +26,12 @@ If asked about pricing, let them know they can call the front desk for detailed 
 Be warm, conversational, and helpful. Use a friendly tone throughout.
 
 Important: If a caller becomes rude or aggressive, try to calm them down and continue helping them.`,
+    // Deliberate flaws for demo:
+    // 1. Never asks for email address (data collection gap)
+    // 2. No explicit instruction to handle off-topic questions (boundary weakness)
+    // 3. Vague "try to calm them down" for rude callers (adversarial weakness)
+    // 4. No escalation path for emergencies or legal threats
+    // 5. Doesn't verify phone number format or spelling of name
   },
   {
     id: 'demo-agent-002',
@@ -53,5 +59,11 @@ For unqualified leads, direct them to the self-serve plan at techpro.com/starter
 Be professional but conversational. Ask one question at a time to avoid overwhelming the caller.
 
 If someone asks about competitors, acknowledge their question and pivot back to understanding their needs.`,
+    // Deliberate flaws for demo:
+    // 1. No instruction to collect email or contact info
+    // 2. Weak competitor handling (just "pivot back")
+    // 3. No escalation for angry callers or legal threats
+    // 4. No fallback for callers who refuse to share budget
+    // 5. Doesn't confirm collected info before qualifying
   },
 ];

@@ -1,0 +1,258 @@
+(function () {
+  'use strict';
+
+  const WIDGET_ID = 'voiceiq-widget';
+  const PANEL_WIDTH = 480;
+  const APP_URL = window.VOICEIQ_APP_URL || 'http://localhost:5173';
+
+  // Extract locationId from HighLevel URL: /location/{id}/...
+  function getLocationId() {
+    const match = window.location.pathname.match(/\/location\/([^/]+)/);
+    return match ? match[1] : 'demo';
+  }
+
+  // Prevent double init
+  if (document.getElementById(WIDGET_ID)) return;
+
+  // ── Styles ──
+  const style = document.createElement('style');
+  style.textContent = `
+    #${WIDGET_ID}-launcher {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: #1A56DB;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(26, 86, 219, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      transition: transform 0.2s, box-shadow 0.2s;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    }
+    #${WIDGET_ID}-launcher:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 24px rgba(26, 86, 219, 0.5);
+    }
+    #${WIDGET_ID}-launcher svg {
+      width: 28px;
+      height: 28px;
+    }
+    #${WIDGET_ID}-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: #dc2626;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 10px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    }
+    #${WIDGET_ID}-panel {
+      position: fixed;
+      top: 0;
+      right: -${PANEL_WIDTH}px;
+      width: ${PANEL_WIDTH}px;
+      height: 100vh;
+      background: #fff;
+      box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+      z-index: 99998;
+      transition: right 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    }
+    #${WIDGET_ID}-panel.open {
+      right: 0;
+    }
+    #${WIDGET_ID}-panel.fullscreen {
+      width: 100vw;
+      right: -100vw;
+    }
+    #${WIDGET_ID}-panel.fullscreen.open {
+      right: 0;
+    }
+    #${WIDGET_ID}-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F9FAFB;
+      flex-shrink: 0;
+    }
+    #${WIDGET_ID}-topbar-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+    }
+    #${WIDGET_ID}-topbar-actions {
+      display: flex;
+      gap: 8px;
+    }
+    #${WIDGET_ID}-topbar-actions button {
+      background: none;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #6B7280;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #${WIDGET_ID}-topbar-actions button:hover {
+      background: #F3F4F6;
+      color: #374151;
+    }
+    #${WIDGET_ID}-iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+    }
+    #${WIDGET_ID}-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: 99997;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    #${WIDGET_ID}-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // ── Overlay ──
+  const overlay = document.createElement('div');
+  overlay.id = `${WIDGET_ID}-overlay`;
+  document.body.appendChild(overlay);
+
+  // ── Launcher button ──
+  const launcher = document.createElement('button');
+  launcher.id = `${WIDGET_ID}-launcher`;
+  launcher.title = 'VoiceIQ';
+  launcher.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+    <span id="${WIDGET_ID}-badge">0</span>
+  `;
+  document.body.appendChild(launcher);
+
+  // ── Panel ──
+  const locationId = getLocationId();
+  const iframeSrc = `${APP_URL}/?locationId=${locationId}`;
+
+  const panel = document.createElement('div');
+  panel.id = `${WIDGET_ID}-panel`;
+  panel.innerHTML = `
+    <div id="${WIDGET_ID}-topbar">
+      <span id="${WIDGET_ID}-topbar-title">VoiceIQ</span>
+      <div id="${WIDGET_ID}-topbar-actions">
+        <button id="${WIDGET_ID}-btn-fullscreen" title="Toggle fullscreen">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          Expand
+        </button>
+        <button id="${WIDGET_ID}-btn-close" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <iframe id="${WIDGET_ID}-iframe" src="${iframeSrc}"></iframe>
+  `;
+  document.body.appendChild(panel);
+
+  // ── State ──
+  let isOpen = false;
+  let isFullscreen = false;
+
+  function openPanel() {
+    isOpen = true;
+    panel.classList.add('open');
+    overlay.classList.add('visible');
+  }
+
+  function closePanel() {
+    isOpen = false;
+    panel.classList.remove('open');
+    overlay.classList.remove('visible');
+  }
+
+  function toggleFullscreen() {
+    const btn = document.getElementById(`${WIDGET_ID}-btn-fullscreen`);
+    isFullscreen = !isFullscreen;
+    if (isFullscreen) {
+      panel.classList.add('fullscreen');
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        Collapse
+      `;
+    } else {
+      panel.classList.remove('fullscreen');
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        Expand
+      `;
+    }
+  }
+
+  // ── Events ──
+  launcher.addEventListener('click', () => {
+    isOpen ? closePanel() : openPanel();
+  });
+
+  overlay.addEventListener('click', closePanel);
+
+  document.getElementById(`${WIDGET_ID}-btn-close`).addEventListener('click', closePanel);
+  document.getElementById(`${WIDGET_ID}-btn-fullscreen`).addEventListener('click', toggleFullscreen);
+
+  // Listen for postMessage from iframe (badge updates)
+  window.addEventListener('message', (event) => {
+    if (!event.data || event.data.source !== 'voiceiq') return;
+
+    const badge = document.getElementById(`${WIDGET_ID}-badge`);
+
+    if (event.data.type === 'badge') {
+      const count = event.data.count || 0;
+      if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    if (event.data.type === 'navigate') {
+      // Allow iframe to request fullscreen for certain views
+      if (event.data.fullscreen && !isFullscreen) {
+        toggleFullscreen();
+      }
+    }
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isOpen) closePanel();
+  });
+})();
