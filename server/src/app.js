@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './auth/auth.routes.js';
 import agentsRoutes from './agents/agents.routes.js';
 import testsRoutes from './tests/tests.routes.js';
+import optimizationsRoutes from './optimizations/optimizations.routes.js';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.get('/api/v1/health', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/api/v1/agents', agentsRoutes);
 app.use('/api/v1/tests', testsRoutes);
+app.use('/api/v1/optimizations', optimizationsRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

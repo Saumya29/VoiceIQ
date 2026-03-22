@@ -184,6 +184,45 @@ const TestsController = {
       next(error);
     }
   },
+
+  // Create a new test run with the same test cases (for re-testing after optimization)
+  async retest(req, res, next) {
+    try {
+      const { runId } = req.params;
+      const { locationId } = req.body;
+
+      const originalRun = TestRunDao.getById(runId);
+      if (!originalRun) {
+        return res.status(404).json({ error: 'Original test run not found' });
+      }
+
+      const originalCases = TestCaseDao.listByTestRunId(runId);
+
+      // Create new run linked to the original
+      const newRun = TestRunDao.create({
+        agentId: originalRun.agent_id,
+        agentName: originalRun.agent_name,
+        locationId: locationId || originalRun.location_id,
+        config: originalRun.config,
+        parentRunId: runId,
+      });
+
+      // Copy test cases into the new run
+      const casesToCopy = originalCases.map(tc => ({
+        category: tc.category,
+        persona: tc.persona,
+        scenario: tc.scenario,
+        successCriteria: tc.success_criteria,
+        openingMessage: tc.opening_message,
+      }));
+
+      const newCases = TestCaseDao.createMany(newRun.id, casesToCopy);
+
+      res.json({ testRun: TestRunDao.getById(newRun.id), testCases: newCases });
+    } catch (error) {
+      next(error);
+    }
+  },
 };
 
 export default TestsController;

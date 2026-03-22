@@ -21,6 +21,11 @@ const routes = [
     name: 'test-results',
     component: () => import('@/views/TestResultsView.vue'),
   },
+  {
+    path: '/optimizations/:optimizationId',
+    name: 'optimization',
+    component: () => import('@/views/OptimizationView.vue'),
+  },
 ];
 
 export default createRouter({

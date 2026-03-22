@@ -61,8 +61,8 @@
 
       <!-- Actions -->
       <div class="results-actions">
-        <button class="btn-primary" @click="generateOptimization">
-          Generate Optimization →
+        <button class="btn-primary" @click="generateOptimization" :disabled="optimizing">
+          {{ optimizing ? 'Generating...' : 'Generate Optimization →' }}
         </button>
       </div>
     </template>
@@ -114,9 +114,24 @@ function toggleExpand(id) {
   expanded.value = expanded.value === id ? null : id;
 }
 
-function generateOptimization() {
-  // Will be wired in Feature 5
-  router.push({ path: `/optimizations/generate`, query: { runId, locationId } });
+const optimizing = ref(false);
+
+async function generateOptimization() {
+  optimizing.value = true;
+  try {
+    const res = await axios.post('/api/v1/optimizations/generate', {
+      runId,
+      locationId,
+    });
+    router.push({
+      path: `/optimizations/${res.data.optimization.id}`,
+      query: { locationId },
+    });
+  } catch (err) {
+    alert('Failed to generate optimization: ' + (err.response?.data?.error || err.message));
+  } finally {
+    optimizing.value = false;
+  }
 }
 </script>
 
