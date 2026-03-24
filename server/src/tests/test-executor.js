@@ -41,10 +41,28 @@ const TestExecutor = {
           conversation, tc.success_criteria, tc.scenario
         );
 
-        // Persist result
+        // Add conciseness metric (voice-specific: long responses are bad on phone)
+        const agentTurns = conversation.filter(t => t.role === 'agent');
+        const wordCounts = agentTurns.map(t => t.content.split(/\s+/).length);
+        const avgWords = Math.round(wordCounts.reduce((a, b) => a + b, 0) / (wordCounts.length || 1));
+        const maxWords = Math.max(...wordCounts, 0);
+        const CONCISE_LIMIT = 80; // ~30 seconds of speech
+        const conciseScore = maxWords <= CONCISE_LIMIT ? 100 : Math.max(0, 100 - (maxWords - CONCISE_LIMIT) * 2);
+        evaluation.conciseness = { avgWords, maxWords, score: conciseScore };
+
+        // Persist result (include conciseness in criteria results for display)
         TestResultDao.complete(resultId, {
           conversation,
-          criteriaResults: evaluation.criteriaResults,
+          criteriaResults: [...evaluation.criteriaResults, {
+            id: 'conciseness',
+            description: `Response conciseness (avg ${evaluation.conciseness.avgWords} words, max ${evaluation.conciseness.maxWords} words per turn)`,
+            passed: evaluation.conciseness.score >= 70,
+            score: evaluation.conciseness.score,
+            reasoning: evaluation.conciseness.maxWords > CONCISE_LIMIT
+              ? `Longest response was ${evaluation.conciseness.maxWords} words (limit: ${CONCISE_LIMIT}). On a phone call, this would take over 30 seconds to speak.`
+              : `All responses were within the ${CONCISE_LIMIT}-word limit. Good for voice delivery.`,
+            evidence: '',
+          }],
           overallScore: evaluation.overallScore,
           verdict: evaluation.verdict,
           turnCount: conversation.length,

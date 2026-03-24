@@ -33,7 +33,8 @@ Return a JSON object:
       "passed": true/false,
       "score": 0-100,
       "reasoning": "Brief explanation of why it passed or failed",
-      "evidence": "Quote from the conversation supporting your judgment"
+      "evidence": "Quote from the conversation supporting your judgment",
+      "suggestion": "If failed: a specific, actionable fix for the agent's system prompt. If passed: leave empty string."
     }
   ],
   "overallScore": 0-100,
@@ -46,5 +47,6 @@ SCORING RULES:
 - verdict = "pass" if overallScore >= 80
 - verdict = "partial" if overallScore >= 50
 - verdict = "fail" if overallScore < 50
-- Be specific in reasoning — cite what the agent did or failed to do`;
+- Be specific in reasoning — cite what the agent did or failed to do
+- For failed criteria, the suggestion must be a concrete prompt change (e.g., "Add an explicit step to ask for the caller's email address after confirming the appointment time")`;
 }

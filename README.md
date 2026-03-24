@@ -95,3 +95,41 @@ client/src/
 ├── router/
 └── views/           # Dashboard, AgentDetail, TestRunner, TestResults, Optimization
 ```
+
+## Beyond pass/fail
+
+A few things on top of the basic test-and-optimize loop:
+
+- **Response conciseness scoring** - Voice agents need to be brief. Long responses are painful on a phone call. After each test, we measure word counts per agent turn and flag anything over 80 words (~30 seconds of speech). This runs as a deterministic check, no LLM cost.
+- **Actionable failure messages** - When a test criterion fails, the evaluator doesn't just say "failed". It gives a specific suggestion for how to fix the system prompt. Something like "Add a step to confirm the caller's email before ending the call" instead of just "did not collect email".
+- **Deployment confidence score** - When you re-test after an optimization, the results page shows a HIGH / MEDIUM / LOW confidence indicator. It checks for regressions (tests that were passing before but fail now) and tells you whether it's safe to push to production.
+
+## What's real vs what's simulated
+
+- **Real**: HighLevel OAuth, agent CRUD via Voice AI API, pushing optimized prompts back to HighLevel, widget injection
+- **Simulated**: Voice conversations are text-based (GPT-4o playing the agent role, GPT-4o-mini playing the caller). No actual phone calls are made. This is intentional - it isolates prompt quality from voice infrastructure and makes tests reproducible
+
+The demo agents work without any HighLevel account. Connect OAuth to test against your real agents.
+
+## Team of One
+
+Built this solo, wearing all the hats:
+
+- **Product**: Scoped the validation flywheel loop (analyze -> test -> optimize -> re-test) as the core workflow. Prioritized the closed-loop experience over breadth of features
+- **Design**: Kept the UI minimal and task-oriented. No component library - just clean CSS that roughly matches HighLevel's look. The widget uses a slide-in panel so it doesn't take over the page
+- **Engineering**: Plain JS monorepo with npm workspaces. SQLite for zero-config setup, SSE for real-time updates, domain-based folder structure. Used different models and temperatures for agent vs caller to avoid self-correlation in simulations
+- **QA**: Stress-tested the codebase for race conditions, crash recovery, data integrity issues, and navigation bugs. Test execution is resumable if the server restarts mid-run
+
+## What I'd build next
+
+Things I thought about but didn't build (yet), roughly in order of impact:
+
+1. **Parallel test execution** - Right now tests run one at a time. Running them concurrently with a configurable concurrency limit (say 3-5) would cut execution time significantly. Would need a semaphore or worker pool pattern.
+2. **Score timeline chart** - A sparkline or line chart showing how an agent's score changes across test runs over time. Makes the improvement trend visible at a glance.
+3. **Deterministic assertions** - Some checks don't need an LLM. Things like "response must mention the word 'email'" or "agent must not say 'I don't know'" can be regex or string checks. Faster, cheaper, and more reliable than asking GPT to judge.
+4. **Failure clustering** - Group similar failures together automatically. If 5 tests all fail because the agent forgets to collect an email, show that as one pattern instead of 5 separate failures. Helps prioritize what to fix.
+5. **Conversation replay stepper** - A step-through UI for conversations where you can click through each turn and see annotations about what went wrong at each point. More useful than reading a wall of text.
+6. **Prompt version history** - Track every version of the system prompt with timestamps and diffs. Right now you can only see current vs optimized, but if you've done 5 rounds of optimization you lose the history.
+7. **Static prompt linting** - Catch common prompt mistakes without running any tests. Things like missing error handling instructions, no escalation path, contradictory rules. Fast feedback before you even run the simulation.
+8. **Invariance / consistency testing** - Run the same test case multiple times and check if the agent gives consistent responses. High variance means the prompt isn't constraining behavior enough.
+9. **Voice-specific tests** - Simulate interruptions mid-sentence, awkward silences, and background noise scenarios. These are uniquely important for phone-based agents and don't apply to chatbots.

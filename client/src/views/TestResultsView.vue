@@ -36,6 +36,10 @@
             {{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}% {{ scoreDelta > 0 ? 'improvement' : scoreDelta < 0 ? 'regression' : 'no change' }}
           </div>
         </div>
+        <div v-if="confidence" class="confidence-banner" :class="confidence.level">
+          <span class="confidence-label">Deployment Confidence: {{ confidence.level.toUpperCase() }}</span>
+          <span class="confidence-detail">{{ confidence.detail }}</span>
+        </div>
       </div>
 
       <!-- KPI Dashboard -->
@@ -75,6 +79,7 @@
               <span :class="['cr-badge', cr.passed ? 'pass' : 'fail']">{{ cr.passed ? 'PASS' : 'FAIL' }}</span>
               <span>{{ cr.description }}</span>
               <p v-if="cr.reasoning" class="cr-reasoning">{{ cr.reasoning }}</p>
+              <p v-if="cr.suggestion && !cr.passed" class="cr-suggestion">Fix: {{ cr.suggestion }}</p>
             </div>
           </div>
 
@@ -132,6 +137,31 @@ const deltaClass = computed(() => {
   if (scoreDelta.value > 0) return 'positive';
   if (scoreDelta.value < 0) return 'negative';
   return 'neutral';
+});
+
+const confidence = computed(() => {
+  if (!parentRun.value) return null;
+  const before = parentRun.value;
+  const after = run.value;
+  const newPassing = (after.passed || 0) - (before.passed || 0);
+  const regressions = Math.max(0, (before.passed || 0) - (after.passed || 0));
+  const delta = scoreDelta.value;
+
+  let level, detail;
+  if (regressions === 0 && delta > 0) {
+    level = 'high';
+    detail = `+${newPassing} tests now passing, 0 regressions. Safe to deploy.`;
+  } else if (regressions === 0 && delta === 0) {
+    level = 'medium';
+    detail = 'No regressions but no improvement either. Review changes.';
+  } else if (regressions > 0 && delta > 0) {
+    level = 'medium';
+    detail = `+${newPassing} new passes but ${regressions} regression(s). Review before deploying.`;
+  } else {
+    level = 'low';
+    detail = `${regressions} regression(s) detected. Do not deploy without fixing.`;
+  }
+  return { level, detail };
 });
 
 function baScoreClass(score) {
@@ -348,6 +378,17 @@ async function generateOptimization() {
   font-style: italic;
 }
 
+.cr-suggestion {
+  width: 100%;
+  font-size: 12px;
+  color: #1e40af;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  padding: 4px 8px;
+  margin: 4px 0 0 36px;
+  border-radius: 0 4px 4px 0;
+}
+
 .conversation {
   margin-top: 16px;
 }
@@ -475,4 +516,31 @@ async function generateOptimization() {
 .ba-delta.positive { color: #059669; background: #d1fae5; }
 .ba-delta.negative { color: #dc2626; background: #fee2e2; }
 .ba-delta.neutral { color: #6b7280; background: #f3f4f6; }
+
+.confidence-banner {
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.confidence-banner.high { background: #d1fae5; border: 1px solid #86efac; }
+.confidence-banner.medium { background: #fef3c7; border: 1px solid #fcd34d; }
+.confidence-banner.low { background: #fee2e2; border: 1px solid #fca5a5; }
+
+.confidence-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confidence-banner.high .confidence-label { color: #065f46; }
+.confidence-banner.medium .confidence-label { color: #92400e; }
+.confidence-banner.low .confidence-label { color: #991b1b; }
+
+.confidence-detail {
+  font-size: 13px;
+  color: #374151;
+}
 </style>
