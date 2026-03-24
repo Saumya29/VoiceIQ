@@ -226,7 +226,6 @@ onMounted(async () => {
     loadingAgent.value = false;
   }
 
-  // Fetch history in parallel
   loadingHistory.value = true;
   try {
     const [runsRes, optRes] = await Promise.all([
@@ -236,7 +235,7 @@ onMounted(async () => {
     testRuns.value = runsRes.data.runs || [];
     optimizations.value = optRes.data.optimizations || [];
   } catch (err) {
-    // Non-critical, just leave empty
+    console.error('Failed to load history:', err);
   } finally {
     loadingHistory.value = false;
   }
@@ -437,8 +436,6 @@ async function runAnalysis() {
 }
 
 .btn-secondary:hover { background: #f9fafb; }
-
-.analysis-results { }
 
 .analysis-summary {
   background: #f0f9ff;

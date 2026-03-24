@@ -1,6 +1,3 @@
-/**
- * Builds the prompt for evaluating a completed conversation against success criteria.
- */
 export function buildEvaluatePrompt(conversation, successCriteria, scenario) {
   const convoText = conversation
     .map(t => `${t.role.toUpperCase()}: ${t.content}`)

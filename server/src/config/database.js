@@ -3,7 +3,6 @@ import path from 'path';
 import fs from 'fs';
 import { config } from './env.js';
 
-// Ensure the data directory exists
 const dbDir = path.dirname(config.databasePath);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
@@ -15,7 +14,6 @@ const db = new Database(config.databasePath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-// Create all tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS installations (
     location_id TEXT PRIMARY KEY,

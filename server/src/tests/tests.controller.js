@@ -1,47 +1,14 @@
-import HighLevelApi from '../services/highlevel-api.js';
-import InstallationsDao from '../auth/installations.dao.js';
 import OpenAIClient from '../services/openai-client.js';
 import { buildAnalyzePrompt } from '../agents/analyze-prompt.js';
-import { DEMO_AGENTS } from '../agents/demo-agents.js';
+import { resolveAgent } from '../agents/resolve-agent.js';
 import TestGenerator from './test-generator.js';
 import TestExecutor from './test-executor.js';
 import TestRunDao from './test-run.dao.js';
 import TestCaseDao from './test-case.dao.js';
 import TestResultDao from './test-result.dao.js';
 
-// In-memory SSE connections keyed by runId
 const sseClients = new Map();
-// Track runs currently executing to prevent double-execution
 const executingRuns = new Set();
-
-// Shared helper to resolve agent (real or demo)
-function normalizeAgent(raw) {
-  return {
-    id: raw.id,
-    locationId: raw.locationId,
-    name: raw.agentName || raw.name || 'Unnamed Agent',
-    businessName: raw.businessName || '',
-    systemPrompt: raw.agentPrompt || raw.systemPrompt || '',
-    welcomeMessage: raw.welcomeMessage || '',
-    phone: raw.inboundNumber || null,
-    voiceId: raw.voiceId || null,
-    language: raw.language || 'en-US',
-    maxCallDuration: raw.maxCallDuration || 900,
-    actions: raw.actions || [],
-    status: raw.inboundNumber ? 'active' : 'configured',
-  };
-}
-
-async function resolveAgent(locationId, agentId) {
-  const installation = InstallationsDao.getByLocationId(locationId);
-  if (!installation) {
-    const agent = DEMO_AGENTS.find(a => a.id === agentId);
-    if (!agent) throw new Error('Agent not found');
-    return agent;
-  }
-  const data = await HighLevelApi.getAgent(locationId, agentId);
-  return normalizeAgent(data);
-}
 
 const TestsController = {
   async generate(req, res, next) {
@@ -126,7 +93,6 @@ const TestsController = {
     }
   },
 
-  // SSE endpoint — client connects here to receive real-time events
   stream(req, res) {
     const { runId } = req.params;
 
@@ -136,20 +102,17 @@ const TestsController = {
       Connection: 'keep-alive',
     });
 
-    // Store this connection
     if (!sseClients.has(runId)) {
       sseClients.set(runId, []);
     }
     sseClients.get(runId).push(res);
 
-    // Remove on disconnect
     req.on('close', () => {
       const clients = sseClients.get(runId) || [];
       sseClients.set(runId, clients.filter(c => c !== res));
     });
   },
 
-  // Trigger test execution
   async execute(req, res, next) {
     try {
       const { runId } = req.params;
@@ -166,20 +129,16 @@ const TestsController = {
 
       executingRuns.add(runId);
 
-      // Resolve the agent to get system prompt
       const agent = await resolveAgent(locationId || run.location_id, run.agent_id);
 
-      // Respond immediately, execution runs in background
       res.json({ message: 'Execution started', runId });
 
-      // Emit SSE events to all connected clients for this run
       const emit = (eventName, data) => {
         const clients = sseClients.get(runId) || [];
         const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
         clients.forEach(client => client.write(payload));
       };
 
-      // Run execution (async, doesn't block response)
       TestExecutor.execute(runId, agent.systemPrompt, emit)
         .catch(err => {
           console.error('Execution error:', err);
@@ -195,7 +154,6 @@ const TestsController = {
     }
   },
 
-  // Create a new test run with the same test cases (for re-testing after optimization)
   async retest(req, res, next) {
     try {
       const { runId } = req.params;
@@ -208,7 +166,6 @@ const TestsController = {
 
       const originalCases = TestCaseDao.listByTestRunId(runId);
 
-      // Create new run linked to the original
       const newRun = TestRunDao.create({
         agentId: originalRun.agent_id,
         agentName: originalRun.agent_name,
@@ -217,7 +174,6 @@ const TestsController = {
         parentRunId: runId,
       });
 
-      // Copy test cases into the new run
       const casesToCopy = originalCases.map(tc => ({
         category: tc.category,
         persona: tc.persona,

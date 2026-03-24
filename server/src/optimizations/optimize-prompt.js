@@ -1,6 +1,3 @@
-/**
- * Builds the prompt for generating an optimized version of the agent's system prompt.
- */
 export function buildOptimizePrompt(originalPrompt, failedResults, passedResults) {
   const failedSection = failedResults.map((r, i) => {
     const convo = r.conversation

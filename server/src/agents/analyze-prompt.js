@@ -1,6 +1,3 @@
-/**
- * Builds the prompt that asks GPT to extract structured analysis from a voice agent's system prompt.
- */
 export function buildAnalyzePrompt(agentName, systemPrompt) {
   return `You are an expert voice AI analyst. Analyze the following voice agent's system prompt and extract a structured breakdown.
 

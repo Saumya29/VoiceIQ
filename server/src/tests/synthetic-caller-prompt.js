@@ -1,6 +1,3 @@
-/**
- * Builds the system prompt for the synthetic caller (plays the human calling in).
- */
 export function buildSyntheticCallerPrompt(persona) {
   return `You are role-playing as a real person calling a business. Stay in character at all times.
 

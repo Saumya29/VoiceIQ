@@ -5,7 +5,6 @@ import InstallationsDao from './installations.dao.js';
 const TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/token';
 
 const AuthController = {
-  // Redirects to HighLevel's OAuth consent screen
   install(req, res) {
     if (!config.ghl.installUrl) {
       return res.status(500).json({
@@ -16,7 +15,6 @@ const AuthController = {
     res.redirect(config.ghl.installUrl);
   },
 
-  // HighLevel redirects here after user approves
   async callback(req, res, next) {
     try {
       const { code } = req.query;
@@ -47,7 +45,6 @@ const AuthController = {
 
       const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
 
-      // Save installation
       InstallationsDao.upsert({
         locationId,
         accessToken: access_token,
@@ -56,7 +53,6 @@ const AuthController = {
         companyName,
       });
 
-      // Redirect to the frontend dashboard with the locationId
       res.redirect(`http://localhost:5173/?locationId=${locationId}`);
     } catch (error) {
       console.error('OAuth callback error:', error.response?.data || error.message);
@@ -64,7 +60,6 @@ const AuthController = {
     }
   },
 
-  // Check if a location has a valid installation
   status(req, res) {
     const { locationId } = req.query;
 

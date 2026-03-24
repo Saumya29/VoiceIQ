@@ -1,6 +1,3 @@
-/**
- * Builds the prompt for generating test cases for a given category.
- */
 export function buildGenerateTestsPrompt(agent, analysis, category, count) {
   return `You are an expert QA engineer for voice AI agents. Generate ${count} test case(s) for the "${category}" category.
 

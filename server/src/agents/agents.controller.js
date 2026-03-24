@@ -3,24 +3,7 @@ import InstallationsDao from '../auth/installations.dao.js';
 import OpenAIClient from '../services/openai-client.js';
 import { buildAnalyzePrompt } from './analyze-prompt.js';
 import { DEMO_AGENTS } from './demo-agents.js';
-
-// Map HighLevel API fields to our app's convention
-function normalizeAgent(raw) {
-  return {
-    id: raw.id,
-    locationId: raw.locationId,
-    name: raw.agentName || raw.name || 'Unnamed Agent',
-    businessName: raw.businessName || '',
-    systemPrompt: raw.agentPrompt || raw.systemPrompt || '',
-    welcomeMessage: raw.welcomeMessage || '',
-    phone: raw.inboundNumber || null,
-    voiceId: raw.voiceId || null,
-    language: raw.language || 'en-US',
-    maxCallDuration: raw.maxCallDuration || 900,
-    actions: raw.actions || [],
-    status: raw.inboundNumber ? 'active' : 'configured',
-  };
-}
+import { normalizeAgent } from './resolve-agent.js';
 
 const AgentsController = {
   async list(req, res, next) {
