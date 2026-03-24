@@ -54,6 +54,12 @@ const TestRunDao = {
     `).run(id);
   },
 
+  updateTotalCases(id, totalCases) {
+    db.prepare(
+      "UPDATE test_runs SET total_cases = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(totalCases, id);
+  },
+
   updateScore(id, overallScore) {
     db.prepare(
       "UPDATE test_runs SET overall_score = ?, updated_at = datetime('now') WHERE id = ?"

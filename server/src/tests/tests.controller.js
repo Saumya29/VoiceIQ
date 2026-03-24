@@ -11,6 +11,8 @@ import TestResultDao from './test-result.dao.js';
 
 // In-memory SSE connections keyed by runId
 const sseClients = new Map();
+// Track runs currently executing to prevent double-execution
+const executingRuns = new Set();
 
 // Shared helper to resolve agent (real or demo)
 function normalizeAgent(raw) {
@@ -112,10 +114,10 @@ const TestsController = {
       }
 
       const updated = TestCaseDao.update(caseId, {
-        persona: persona || existing.persona,
-        scenario: scenario || existing.scenario,
-        successCriteria: successCriteria || existing.success_criteria,
-        openingMessage: openingMessage || existing.opening_message,
+        persona: persona !== undefined ? persona : existing.persona,
+        scenario: scenario !== undefined ? scenario : existing.scenario,
+        successCriteria: successCriteria !== undefined ? successCriteria : existing.success_criteria,
+        openingMessage: openingMessage !== undefined ? openingMessage : existing.opening_message,
       });
 
       res.json({ testCase: updated });
@@ -158,9 +160,11 @@ const TestsController = {
         return res.status(404).json({ error: 'Test run not found' });
       }
 
-      if (run.status === 'running') {
+      if (run.status === 'running' || executingRuns.has(runId)) {
         return res.status(400).json({ error: 'Test run is already executing' });
       }
+
+      executingRuns.add(runId);
 
       // Resolve the agent to get system prompt
       const agent = await resolveAgent(locationId || run.location_id, run.agent_id);
@@ -176,11 +180,17 @@ const TestsController = {
       };
 
       // Run execution (async, doesn't block response)
-      TestExecutor.execute(runId, agent.systemPrompt, emit).catch(err => {
-        console.error('Execution error:', err);
-        emit('error', { message: err.message });
-      });
+      TestExecutor.execute(runId, agent.systemPrompt, emit)
+        .catch(err => {
+          console.error('Execution error:', err);
+          emit('error', { message: err.message });
+        })
+        .finally(() => {
+          executingRuns.delete(runId);
+          sseClients.delete(runId);
+        });
     } catch (error) {
+      executingRuns.delete(runId);
       next(error);
     }
   },

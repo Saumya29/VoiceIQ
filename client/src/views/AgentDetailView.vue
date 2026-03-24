@@ -1,7 +1,7 @@
 <template>
   <div class="agent-detail">
     <header class="detail-header">
-      <button class="back-btn" @click="$router.push('/')">← Back</button>
+      <button class="back-btn" @click="$router.push({ path: '/', query: { locationId } })">← Back</button>
       <div>
         <h1>{{ agent?.name || 'Loading...' }}</h1>
         <p class="subtitle">{{ agent?.businessName }}</p>
@@ -146,9 +146,41 @@
 
       <!-- History Tab -->
       <div v-if="activeTab === 'history'" class="tab-content">
-        <div class="empty-state">
+        <div v-if="loadingHistory" class="loading">Loading history...</div>
+        <div v-else-if="!testRuns.length && !optimizations.length" class="empty-state">
           <p>No test runs or optimizations yet. Analyze the agent first, then generate and run tests.</p>
         </div>
+        <template v-else>
+          <div v-if="testRuns.length" class="history-section">
+            <h3>Test Runs ({{ testRuns.length }})</h3>
+            <div v-for="run in testRuns" :key="run.id" class="history-card" @click="$router.push({ path: `/tests/${run.id}/results`, query: { locationId } })">
+              <div class="history-card-header">
+                <span :class="['run-status', run.status]">{{ run.status }}</span>
+                <span class="history-date">{{ formatDate(run.created_at) }}</span>
+              </div>
+              <div class="history-card-body">
+                <span class="history-score" v-if="run.overall_score != null">Score: {{ run.overall_score }}%</span>
+                <span class="history-cases">{{ run.completed_cases || 0 }}/{{ run.total_cases }} cases</span>
+                <span class="history-verdicts">
+                  <span class="v-pass" v-if="run.passed">{{ run.passed }} passed</span>
+                  <span class="v-fail" v-if="run.failed">{{ run.failed }} failed</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div v-if="optimizations.length" class="history-section">
+            <h3>Optimizations ({{ optimizations.length }})</h3>
+            <div v-for="opt in optimizations" :key="opt.id" class="history-card" @click="$router.push({ path: `/optimizations/${opt.id}`, query: { locationId } })">
+              <div class="history-card-header">
+                <span :class="['opt-status', opt.status]">{{ opt.status }}</span>
+                <span class="history-date">{{ formatDate(opt.created_at) }}</span>
+              </div>
+              <div class="history-card-body">
+                <span>{{ opt.change_summary || 'Prompt optimization' }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </template>
   </div>
@@ -171,6 +203,10 @@ const analysis = ref(null);
 const loadingAnalysis = ref(false);
 const analysisError = ref('');
 
+const testRuns = ref([]);
+const optimizations = ref([]);
+const loadingHistory = ref(false);
+
 const activeTab = ref('prompt');
 const tabs = [
   { id: 'prompt', label: 'Prompt' },
@@ -189,7 +225,28 @@ onMounted(async () => {
   } finally {
     loadingAgent.value = false;
   }
+
+  // Fetch history in parallel
+  loadingHistory.value = true;
+  try {
+    const [runsRes, optRes] = await Promise.all([
+      axios.get('/api/v1/tests/runs', { params: { agentId } }),
+      axios.get('/api/v1/optimizations', { params: { agentId } }),
+    ]);
+    testRuns.value = runsRes.data.runs || [];
+    optimizations.value = optRes.data.optimizations || [];
+  } catch (err) {
+    // Non-critical, just leave empty
+  } finally {
+    loadingHistory.value = false;
+  }
 });
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 async function runAnalysis() {
   loadingAnalysis.value = true;
@@ -493,4 +550,61 @@ async function runAnalysis() {
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
 }
+
+/* History tab */
+.history-section { margin-bottom: 32px; }
+.history-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.history-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.history-card:hover { border-color: #3b82f6; }
+
+.history-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.history-card-body {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.history-date { font-size: 12px; color: #9ca3af; }
+
+.history-score { font-weight: 600; color: #111827; }
+
+.run-status, .opt-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.run-status.completed, .opt-status.applied { background: #d1fae5; color: #065f46; }
+.run-status.running { background: #dbeafe; color: #1e40af; }
+.run-status.pending, .opt-status.pending { background: #f3f4f6; color: #6b7280; }
+.run-status.failed { background: #fee2e2; color: #991b1b; }
+.opt-status.approved { background: #dbeafe; color: #1e40af; }
+.opt-status.rejected { background: #fee2e2; color: #991b1b; }
+
+.history-verdicts { display: flex; gap: 8px; }
+.v-pass { color: #059669; }
+.v-fail { color: #dc2626; }
 </style>

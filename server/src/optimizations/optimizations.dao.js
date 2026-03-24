@@ -8,7 +8,7 @@ const parseJson = (row) => {
     prompt_diff: row.prompt_diff ? JSON.parse(row.prompt_diff) : null,
     failure_patterns: row.failure_patterns ? JSON.parse(row.failure_patterns) : [],
     changes_summary: row.changes_summary ? JSON.parse(row.changes_summary) : [],
-    expected_improvements: row.expected_improvements ? JSON.parse(row.expected_improvements) : [],
+    expected_improvements: row.expected_improvements ? JSON.parse(row.expected_improvements) : '',
   };
 };
 

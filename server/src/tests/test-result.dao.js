@@ -67,6 +67,12 @@ const TestResultDao = {
     return parseJson(row);
   },
 
+  deleteIncomplete(testRunId, testCaseId) {
+    db.prepare(
+      'DELETE FROM test_results WHERE test_run_id = ? AND test_case_id = ? AND completed_at IS NULL'
+    ).run(testRunId, testCaseId);
+  },
+
   getExecutedCaseIds(testRunId) {
     const rows = db.prepare(
       'SELECT test_case_id FROM test_results WHERE test_run_id = ? AND completed_at IS NOT NULL'

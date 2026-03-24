@@ -35,7 +35,8 @@ const TestGenerator = {
     // Store all test cases in DB
     const testCases = TestCaseDao.createMany(testRun.id, allCases);
 
-    // Update total_cases to actual count
+    // Update total_cases to actual count (OpenAI may return more/fewer than requested)
+    TestRunDao.updateTotalCases(testRun.id, allCases.length);
     const updated = TestRunDao.getById(testRun.id);
 
     return { testRun: updated, testCases };

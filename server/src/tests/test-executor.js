@@ -27,6 +27,9 @@ const TestExecutor = {
 
       emit('test_case_started', { testCaseId: tc.id, scenario: tc.scenario });
 
+      // Clean up any incomplete result rows from a previous crashed run
+      TestResultDao.deleteIncomplete(runId, tc.id);
+
       const resultId = TestResultDao.create({ testRunId: runId, testCaseId: tc.id });
 
       try {
@@ -39,7 +42,7 @@ const TestExecutor = {
         );
 
         // Persist result
-        const result = TestResultDao.complete(resultId, {
+        TestResultDao.complete(resultId, {
           conversation,
           criteriaResults: evaluation.criteriaResults,
           overallScore: evaluation.overallScore,
