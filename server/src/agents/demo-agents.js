@@ -2,8 +2,12 @@ export const DEMO_AGENTS = [
   {
     id: 'demo-agent-001',
     name: 'Bella - Appointment Booking Agent',
+    businessName: 'Sunrise Dental Clinic',
     status: 'active',
     phone: '+1 (555) 123-4567',
+    language: 'en-US',
+    maxCallDuration: 900,
+    actions: [],
     systemPrompt: `You are Bella, a friendly appointment booking assistant for Sunrise Dental Clinic.
 
 Your goals:
@@ -36,8 +40,12 @@ Important: If a caller becomes rude or aggressive, try to calm them down and con
   {
     id: 'demo-agent-002',
     name: 'Max - Lead Qualification Agent',
+    businessName: 'TechPro Solutions',
     status: 'active',
     phone: '+1 (555) 987-6543',
+    language: 'en-US',
+    maxCallDuration: 900,
+    actions: [],
     systemPrompt: `You are Max, a lead qualification agent for TechPro Solutions, a B2B SaaS company.
 
 Your role is to qualify inbound leads by gathering key information:

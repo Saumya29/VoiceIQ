@@ -16,7 +16,7 @@ const AgentsController = {
 
       const installation = InstallationsDao.getByLocationId(locationId);
       if (!installation) {
-        return res.json({ agents: DEMO_AGENTS, demo: true });
+        return res.json({ agents: DEMO_AGENTS.map(normalizeAgent), demo: true });
       }
 
       const data = await HighLevelApi.listAgents(locationId);
@@ -42,7 +42,7 @@ const AgentsController = {
         if (!agent) {
           return res.status(404).json({ error: 'Agent not found' });
         }
-        return res.json({ agent, demo: true });
+        return res.json({ agent: normalizeAgent(agent), demo: true });
       }
 
       const data = await HighLevelApi.getAgent(locationId, agentId);
@@ -68,6 +68,7 @@ const AgentsController = {
         if (!agent) {
           return res.status(404).json({ error: 'Agent not found' });
         }
+        agent = normalizeAgent(agent);
       } else {
         const data = await HighLevelApi.getAgent(locationId, agentId);
         agent = normalizeAgent(data);

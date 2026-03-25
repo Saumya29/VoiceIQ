@@ -1,19 +1,40 @@
 <template>
-  <div class="agent-detail">
-    <header class="detail-header">
-      <button class="back-btn" @click="$router.push({ path: '/', query: { locationId: session.locationId } })">← Back</button>
-      <div>
-        <h1>{{ agent?.name || 'Loading...' }}</h1>
-        <p class="subtitle">{{ agent?.businessName }}</p>
+  <div class="page-shell page-shell-narrow stack">
+    <header class="page-header detail-page-header">
+      <div class="page-header-main">
+        <button class="btn detail-back-btn" @click="$router.push({ path: '/', query: { locationId: session.locationId } })">← Back</button>
+        <div>
+          <span class="page-kicker">Agent workspace</span>
+          <h1 class="page-heading">{{ headerTitle }}</h1>
+          <p class="page-subtitle">{{ headerSubtitle }}</p>
+        </div>
       </div>
       <span v-if="agent" :class="['status-badge', agent.status]">{{ agent.status }}</span>
     </header>
 
-    <div v-if="loadingAgent" class="loading">Loading agent...</div>
-    <div v-else-if="agentError" class="error">{{ agentError }}</div>
+    <div v-if="loadingAgent" class="loading-state">Loading agent details...</div>
+    <div v-else-if="agentError" class="error-state">{{ agentError }}</div>
 
     <template v-else>
-      <div class="tabs">
+      <section class="detail-overview grid-auto">
+        <div class="stat-card">
+          <span class="eyebrow">Phone</span>
+          <strong class="metric-value metric-value-mono">{{ agent.phone || 'Not assigned' }}</strong>
+          <span class="muted">Connected line for this agent</span>
+        </div>
+        <div class="stat-card">
+          <span class="eyebrow">Language</span>
+          <strong class="metric-value">{{ formatLanguage(agent.language) }}</strong>
+          <span class="muted">Primary language in the prompt</span>
+        </div>
+        <div class="stat-card">
+          <span class="eyebrow">Runtime</span>
+          <strong class="metric-value metric-value-mono">{{ Math.floor((agent.maxCallDuration || 0) / 60) }} min</strong>
+          <span class="muted">Maximum call duration</span>
+        </div>
+      </section>
+
+      <div class="tabs surface-card">
         <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -24,73 +45,102 @@
         </button>
       </div>
 
-      <!-- Prompt Tab -->
-      <div v-if="activeTab === 'prompt'" class="tab-content">
-        <div class="prompt-section">
-          <h3>System Prompt</h3>
+      <div v-if="activeTab === 'prompt'" class="tab-content stack">
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">System prompt</h3>
+              <p class="section-copy">The core prompt VoiceIQ will inspect, test, and refine.</p>
+            </div>
+          </div>
           <pre class="prompt-box">{{ agent.systemPrompt || 'No prompt configured' }}</pre>
-        </div>
-        <div v-if="agent.welcomeMessage" class="prompt-section">
-          <h3>Welcome Message</h3>
+        </section>
+
+        <section v-if="agent.welcomeMessage" class="section-card">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Welcome message</h3>
+              <p class="section-copy">The opening line callers hear before the conversation starts.</p>
+            </div>
+          </div>
           <pre class="prompt-box">{{ agent.welcomeMessage }}</pre>
-        </div>
-        <div class="meta-grid">
-          <div class="meta-item">
-            <span class="meta-label">Phone</span>
-            <span class="meta-value">{{ agent.phone || 'None' }}</span>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Configuration snapshot</h3>
+              <p class="section-copy">Quick reference for the current agent setup.</p>
+            </div>
           </div>
-          <div class="meta-item">
-            <span class="meta-label">Language</span>
-            <span class="meta-value">{{ agent.language }}</span>
+          <div class="meta-grid">
+            <div class="meta-item">
+              <span class="meta-label">Phone</span>
+              <span class="meta-value">{{ agent.phone || 'None' }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Language</span>
+              <span class="meta-value">{{ formatLanguage(agent.language) }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Max Call Duration</span>
+              <span class="meta-value">{{ Math.floor((agent.maxCallDuration || 0) / 60) }} min</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Actions</span>
+              <span class="meta-value">{{ formatActions(agent.actions) }}</span>
+            </div>
           </div>
-          <div class="meta-item">
-            <span class="meta-label">Max Call Duration</span>
-            <span class="meta-value">{{ Math.floor(agent.maxCallDuration / 60) }} min</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Actions</span>
-            <span class="meta-value">{{ agent.actions?.length || 0 }} configured</span>
-          </div>
-        </div>
+        </section>
       </div>
 
-      <!-- Analysis Tab -->
-      <div v-if="activeTab === 'analysis'" class="tab-content">
+      <div v-if="activeTab === 'analysis'" class="tab-content stack">
         <div v-if="!analysis && !loadingAnalysis" class="empty-state">
           <p>No analysis yet. Analyze this agent's prompt to identify goals, rules, flows, and potential weaknesses.</p>
           <button class="btn-primary" @click="runAnalysis" :disabled="!agent.systemPrompt">
             Analyze Prompt
           </button>
         </div>
-        <div v-if="loadingAnalysis" class="loading">
+        <div v-if="loadingAnalysis" class="loading-state">
           Analyzing prompt with GPT-4o... This may take 10-15 seconds.
         </div>
-        <div v-if="analysisError" class="error">{{ analysisError }}</div>
+        <div v-if="analysisError" class="error-state">{{ analysisError }}</div>
 
-        <div v-if="analysis" class="analysis-results">
-          <div class="analysis-summary">
-            <h3>Summary</h3>
+        <div v-if="analysis" class="analysis-results stack">
+          <section class="section-card analysis-summary">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Summary</h3>
+                <p class="section-copy">A synthesized read of the current prompt and likely performance gaps.</p>
+              </div>
+            </div>
             <p>{{ analysis.summary }}</p>
-          </div>
+          </section>
 
-          <div v-if="analysis.goals?.length" class="analysis-section">
-            <h3>Goals ({{ analysis.goals.length }})</h3>
+          <section v-if="analysis.goals?.length" class="section-card analysis-section">
+            <div class="section-header">
+              <h3 class="section-title">Goals ({{ analysis.goals.length }})</h3>
+            </div>
             <div v-for="goal in analysis.goals" :key="goal.id" class="analysis-item">
               <span :class="['priority-badge', goal.priority]">{{ goal.priority }}</span>
               <span>{{ goal.description }}</span>
             </div>
-          </div>
+          </section>
 
-          <div v-if="analysis.rules?.length" class="analysis-section">
-            <h3>Rules ({{ analysis.rules.length }})</h3>
+          <section v-if="analysis.rules?.length" class="section-card analysis-section">
+            <div class="section-header">
+              <h3 class="section-title">Rules ({{ analysis.rules.length }})</h3>
+            </div>
             <div v-for="rule in analysis.rules" :key="rule.id" class="analysis-item">
               <span class="category-badge">{{ rule.category }}</span>
               <span>{{ rule.description }}</span>
             </div>
-          </div>
+          </section>
 
-          <div v-if="analysis.conversationFlows?.length" class="analysis-section">
-            <h3>Conversation Flows ({{ analysis.conversationFlows.length }})</h3>
+          <section v-if="analysis.conversationFlows?.length" class="section-card analysis-section">
+            <div class="section-header">
+              <h3 class="section-title">Conversation Flows ({{ analysis.conversationFlows.length }})</h3>
+            </div>
             <div v-for="flow in analysis.conversationFlows" :key="flow.id" class="flow-card">
               <h4>{{ flow.name }}</h4>
               <ol>
@@ -98,40 +148,48 @@
               </ol>
               <p class="happy-path">Happy path: {{ flow.happyPath }}</p>
             </div>
-          </div>
+          </section>
 
-          <div v-if="analysis.dataCollection?.length" class="analysis-section">
-            <h3>Data Collection ({{ analysis.dataCollection.length }})</h3>
+          <section v-if="analysis.dataCollection?.length" class="section-card analysis-section">
+            <div class="section-header">
+              <h3 class="section-title">Data Collection ({{ analysis.dataCollection.length }})</h3>
+            </div>
             <div v-for="(item, i) in analysis.dataCollection" :key="i" class="analysis-item">
               <span :class="['required-badge', { required: item.required }]">
                 {{ item.required ? 'Required' : 'Optional' }}
               </span>
               <strong>{{ item.field }}</strong> — {{ item.method }}
             </div>
-          </div>
+          </section>
 
-          <div v-if="analysis.boundaries?.length" class="analysis-section">
-            <h3>Boundaries ({{ analysis.boundaries.length }})</h3>
+          <section v-if="analysis.boundaries?.length" class="section-card analysis-section">
+            <div class="section-header">
+              <h3 class="section-title">Boundaries ({{ analysis.boundaries.length }})</h3>
+            </div>
             <div v-for="b in analysis.boundaries" :key="b.id" class="analysis-item">
               {{ b.description }}
             </div>
-          </div>
+          </section>
 
-          <div v-if="analysis.escalationTriggers?.length" class="analysis-section">
-            <h3>Escalation Triggers ({{ analysis.escalationTriggers.length }})</h3>
+          <section v-if="analysis.escalationTriggers?.length" class="section-card analysis-section">
+            <div class="section-header">
+              <h3 class="section-title">Escalation Triggers ({{ analysis.escalationTriggers.length }})</h3>
+            </div>
             <div v-for="e in analysis.escalationTriggers" :key="e.id" class="analysis-item">
               <strong>Trigger:</strong> {{ e.trigger }}<br />
               <strong>Action:</strong> {{ e.action }}
             </div>
-          </div>
+          </section>
 
-          <div v-if="analysis.potentialWeaknesses?.length" class="analysis-section weaknesses">
-            <h3>Potential Weaknesses ({{ analysis.potentialWeaknesses.length }})</h3>
+          <section v-if="analysis.potentialWeaknesses?.length" class="section-card analysis-section weaknesses">
+            <div class="section-header">
+              <h3 class="section-title">Potential Weaknesses ({{ analysis.potentialWeaknesses.length }})</h3>
+            </div>
             <div v-for="w in analysis.potentialWeaknesses" :key="w.id" class="analysis-item">
               <span :class="['severity-badge', w.severity]">{{ w.severity }}</span>
               <span>{{ w.description }}</span>
             </div>
-          </div>
+          </section>
 
           <div class="analysis-actions">
             <button class="btn-primary" @click="$router.push({ path: `/agents/${agentId}/test`, query: { locationId: session.locationId } })">
@@ -144,15 +202,16 @@
         </div>
       </div>
 
-      <!-- History Tab -->
-      <div v-if="activeTab === 'history'" class="tab-content">
-        <div v-if="loadingHistory" class="loading">Loading history...</div>
+      <div v-if="activeTab === 'history'" class="tab-content stack">
+        <div v-if="loadingHistory" class="loading-state">Loading history...</div>
         <div v-else-if="!testRuns.length && !optimizations.length" class="empty-state">
           <p>No test runs or optimizations yet. Analyze the agent first, then generate and run tests.</p>
         </div>
         <template v-else>
-          <div v-if="testRuns.length" class="history-section">
-            <h3>Test Runs ({{ testRuns.length }})</h3>
+          <section v-if="testRuns.length" class="section-card history-section">
+            <div class="section-header">
+              <h3 class="section-title">Test Runs ({{ testRuns.length }})</h3>
+            </div>
             <div v-for="run in testRuns" :key="run.id" class="history-card" @click="$router.push({ path: `/tests/${run.id}/results`, query: { locationId: session.locationId } })">
               <div class="history-card-header">
                 <span :class="['run-status', run.status]">{{ run.status }}</span>
@@ -167,9 +226,12 @@
                 </span>
               </div>
             </div>
-          </div>
-          <div v-if="optimizations.length" class="history-section">
-            <h3>Optimizations ({{ optimizations.length }})</h3>
+          </section>
+
+          <section v-if="optimizations.length" class="section-card history-section">
+            <div class="section-header">
+              <h3 class="section-title">Optimizations ({{ optimizations.length }})</h3>
+            </div>
             <div v-for="opt in optimizations" :key="opt.id" class="history-card" @click="$router.push({ path: `/optimizations/${opt.id}`, query: { locationId: session.locationId } })">
               <div class="history-card-header">
                 <span :class="['opt-status', opt.status]">{{ opt.status }}</span>
@@ -179,7 +241,7 @@
                 <span>{{ opt.change_summary || 'Prompt optimization' }}</span>
               </div>
             </div>
-          </div>
+          </section>
         </template>
       </div>
     </template>
@@ -187,7 +249,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { useSessionStore } from '@/stores/session.js';
@@ -214,6 +276,18 @@ const tabs = [
   { id: 'analysis', label: 'Analysis' },
   { id: 'history', label: 'History' },
 ];
+
+const headerTitle = computed(() => {
+  if (loadingAgent.value) return 'Agent workspace';
+  return agent.value?.name || 'Agent workspace';
+});
+
+const headerSubtitle = computed(() => {
+  if (loadingAgent.value) {
+    return 'Loading agent configuration, prompt details, and optimization history.';
+  }
+  return agent.value?.businessName || 'Voice agent details and optimization history';
+});
 
 onMounted(async () => {
   try {
@@ -248,6 +322,17 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatLanguage(language) {
+  if (!language) return 'Unspecified';
+  if (language === 'en-US') return 'English (US)';
+  return language;
+}
+
+function formatActions(actions) {
+  const count = actions?.length || 0;
+  return count ? `${count} configured` : 'None configured';
+}
+
 async function runAnalysis() {
   loadingAnalysis.value = true;
   analysisError.value = '';
@@ -266,343 +351,335 @@ async function runAnalysis() {
 </script>
 
 <style scoped>
-.agent-detail {
-  padding: 32px 40px;
-  max-width: 960px;
-  margin: 0 auto;
+.detail-page-header {
+  margin-bottom: 8px;
 }
 
-.detail-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
+.detail-back-btn {
+  width: auto;
+  flex: 0 0 auto;
 }
 
-.back-btn {
-  background: none;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #374151;
+.detail-overview {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.back-btn:hover {
-  background: #f9fafb;
+.detail-overview .stat-card {
+  gap: 10px;
 }
 
-.detail-header h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
+.metric-value {
+  font-size: 1.35rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
 }
 
-.subtitle {
-  color: #6b7280;
-  font-size: 13px;
-  margin: 2px 0 0 0;
+.metric-value-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 8px;
-  text-transform: uppercase;
-  margin-left: auto;
-}
-
-.status-badge.active { background: #d1fae5; color: #065f46; }
-.status-badge.configured { background: #dbeafe; color: #1e40af; }
-.status-badge.inactive { background: #f3f4f6; color: #6b7280; }
-
-.loading, .error {
-  text-align: center;
-  padding: 60px 0;
-  color: #6b7280;
-  font-size: 15px;
-}
-
-.error { color: #dc2626; }
 
 .tabs {
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 24px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 24px;
+  overflow-x: auto;
 }
 
 .tab {
-  background: none;
+  flex: 1 0 0;
   border: none;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b7280;
+  border-radius: 18px;
+  padding: 14px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  transition: background-color var(--ease-standard), color var(--ease-standard), box-shadow var(--ease-standard);
 }
 
-.tab:hover { color: #111827; }
-.tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+.tab:hover {
+  color: var(--text-primary);
+}
 
-.tab-content { min-height: 300px; }
+.tab.active {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
 
-/* Prompt tab */
-.prompt-section { margin-bottom: 24px; }
-.prompt-section h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 8px 0;
+.tab-content {
+  min-height: 300px;
 }
 
 .prompt-box {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  font-size: 13px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  padding: 20px;
+  font-size: 0.94rem;
   line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;
-  color: #374151;
-  max-height: 400px;
+  color: var(--text-secondary);
+  max-height: 460px;
   overflow-y: auto;
 }
 
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
 }
 
 .meta-item {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  padding: 16px;
 }
 
 .meta-label {
   display: block;
-  font-size: 11px;
+  font-size: 0.72rem;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.meta-value {
-  font-size: 14px;
-  color: #111827;
-}
-
-/* Analysis tab */
-.empty-state {
-  text-align: center;
-  padding: 60px 0;
-  color: #6b7280;
-}
-
-.empty-state p { margin-bottom: 16px; }
-
-.btn-primary {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-primary:hover { background: #2563eb; }
-.btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
-
-.btn-secondary {
-  background: #fff;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-secondary:hover { background: #f9fafb; }
-
-.analysis-summary {
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
-}
-
-.analysis-summary h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #0369a1;
-  margin: 0 0 8px 0;
-}
-
-.analysis-summary p {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.5;
-  margin: 0;
-}
-
-.analysis-section {
-  margin-bottom: 24px;
-}
-
-.analysis-section h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 12px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.analysis-item {
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.5;
-  border-left: 3px solid #e5e7eb;
+  letter-spacing: 0.08em;
   margin-bottom: 8px;
 }
 
-.weaknesses .analysis-item {
-  border-left-color: #fbbf24;
-  background: #fffbeb;
+.meta-value {
+  font-size: 0.98rem;
+  color: var(--text-primary);
 }
 
-.priority-badge, .category-badge, .severity-badge, .required-badge {
+.analysis-summary {
+  background: linear-gradient(135deg, rgba(237, 244, 255, 0.94), rgba(255, 255, 255, 0.88));
+}
+
+.analysis-summary p {
+  font-size: 0.98rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.analysis-item {
+  padding: 12px 14px;
+  font-size: 0.94rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  border-left: 3px solid rgba(148, 163, 184, 0.26);
+  margin-bottom: 10px;
+  border-radius: 0 16px 16px 0;
+  background: rgba(248, 250, 252, 0.75);
+}
+
+.weaknesses .analysis-item {
+  border-left-color: rgba(194, 122, 11, 0.4);
+  background: rgba(255, 246, 232, 0.88);
+}
+
+.priority-badge,
+.category-badge,
+.severity-badge,
+.required-badge {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.66rem;
   font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
   text-transform: uppercase;
   margin-right: 8px;
+  letter-spacing: 0.06em;
 }
 
-.priority-badge.high { background: #fee2e2; color: #991b1b; }
-.priority-badge.medium { background: #fef3c7; color: #92400e; }
-.priority-badge.low { background: #f3f4f6; color: #6b7280; }
+.priority-badge.high,
+.severity-badge.high,
+.required-badge.required {
+  background: rgba(209, 67, 67, 0.14);
+  color: #b42323;
+}
 
-.severity-badge.high { background: #fee2e2; color: #991b1b; }
-.severity-badge.medium { background: #fef3c7; color: #92400e; }
-.severity-badge.low { background: #f3f4f6; color: #6b7280; }
+.priority-badge.medium,
+.severity-badge.medium {
+  background: rgba(194, 122, 11, 0.14);
+  color: #9a640e;
+}
 
-.category-badge { background: #ede9fe; color: #5b21b6; }
+.priority-badge.low,
+.severity-badge.low,
+.required-badge {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+}
 
-.required-badge { background: #f3f4f6; color: #6b7280; }
-.required-badge.required { background: #fee2e2; color: #991b1b; }
+.category-badge {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent-strong);
+}
 
 .flow-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  padding: 18px;
   margin-bottom: 12px;
 }
 
 .flow-card h4 {
-  font-size: 14px;
+  font-size: 0.98rem;
   font-weight: 600;
-  margin: 0 0 8px 0;
-  color: #111827;
+  color: var(--text-primary);
+  margin: 0 0 8px;
 }
 
 .flow-card ol {
-  margin: 0 0 8px 0;
-  padding-left: 20px;
-  font-size: 13px;
-  color: #374151;
+  margin: 0 0 12px 18px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
-.flow-card li { margin-bottom: 4px; }
-
 .happy-path {
-  font-size: 12px;
-  color: #059669;
-  margin: 0;
-  font-style: italic;
+  font-size: 0.88rem;
+  color: var(--text-tertiary);
 }
 
 .analysis-actions {
   display: flex;
   gap: 12px;
-  margin-top: 32px;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
-}
-
-/* History tab */
-.history-section { margin-bottom: 32px; }
-.history-section h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 12px 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .history-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: rgba(248, 250, 252, 0.82);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition:
+    transform var(--ease-standard),
+    border-color var(--ease-standard),
+    box-shadow var(--ease-standard);
 }
 
-.history-card:hover { border-color: #3b82f6; }
+.history-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
 
 .history-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 12px;
 }
 
 .history-card-body {
   display: flex;
   gap: 16px;
-  font-size: 13px;
-  color: #6b7280;
+  flex-wrap: wrap;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
 }
 
-.history-date { font-size: 12px; color: #9ca3af; }
+.history-date {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
 
-.history-score { font-weight: 600; color: #111827; }
-
-.run-status, .opt-status {
-  font-size: 11px;
+.history-score {
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.run-status,
+.opt-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.run-status.completed, .opt-status.applied { background: #d1fae5; color: #065f46; }
-.run-status.running { background: #dbeafe; color: #1e40af; }
-.run-status.pending, .opt-status.pending { background: #f3f4f6; color: #6b7280; }
-.run-status.failed { background: #fee2e2; color: #991b1b; }
-.opt-status.approved { background: #dbeafe; color: #1e40af; }
-.opt-status.rejected { background: #fee2e2; color: #991b1b; }
+.run-status.completed,
+.opt-status.applied {
+  background: rgba(15, 159, 110, 0.12);
+  color: #0d7a55;
+}
 
-.history-verdicts { display: flex; gap: 8px; }
-.v-pass { color: #059669; }
-.v-fail { color: #dc2626; }
+.run-status.running,
+.opt-status.approved {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent-strong);
+}
+
+.run-status.pending {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+}
+
+.run-status.failed,
+.opt-status.rejected {
+  background: rgba(209, 67, 67, 0.13);
+  color: #b42323;
+}
+
+.history-verdicts {
+  display: flex;
+  gap: 8px;
+}
+
+.v-pass {
+  color: var(--success);
+}
+
+.v-fail {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .detail-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .detail-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs {
+    padding: 6px;
+  }
+
+  .tab {
+    min-width: 140px;
+    flex: 0 0 auto;
+    padding: 12px 16px;
+  }
+
+  .analysis-actions {
+    justify-content: stretch;
+  }
+
+  .history-card-header,
+  .history-card-body {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 </style>

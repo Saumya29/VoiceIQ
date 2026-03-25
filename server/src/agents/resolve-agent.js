@@ -10,12 +10,12 @@ export function normalizeAgent(raw) {
     businessName: raw.businessName || '',
     systemPrompt: raw.agentPrompt || raw.systemPrompt || '',
     welcomeMessage: raw.welcomeMessage || '',
-    phone: raw.inboundNumber || null,
+    phone: raw.inboundNumber || raw.phone || null,
     voiceId: raw.voiceId || null,
     language: raw.language || 'en-US',
     maxCallDuration: raw.maxCallDuration || 900,
     actions: raw.actions || [],
-    status: raw.inboundNumber ? 'active' : 'configured',
+    status: raw.status || (raw.inboundNumber || raw.phone ? 'active' : 'configured'),
   };
 }
 
@@ -24,7 +24,7 @@ export async function resolveAgent(locationId, agentId) {
   if (!installation) {
     const agent = DEMO_AGENTS.find(a => a.id === agentId);
     if (!agent) throw new Error('Agent not found');
-    return agent;
+    return normalizeAgent(agent);
   }
   const data = await HighLevelApi.getAgent(locationId, agentId);
   return normalizeAgent(data);

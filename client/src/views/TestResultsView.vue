@@ -1,104 +1,149 @@
 <template>
-  <div class="test-results">
-    <header class="results-header">
-      <button class="back-btn" @click="$router.back()">← Back</button>
-      <h1>Test Results</h1>
+  <div class="page-shell page-shell-narrow stack">
+    <header class="page-header results-page-header">
+      <div class="page-header-main">
+        <button class="btn results-back-btn" @click="$router.back()">← Back</button>
+        <div>
+          <span class="page-kicker">Validation results</span>
+          <h1 class="page-heading">Test Results</h1>
+          <p class="page-subtitle">
+            Review pass rates, inspect failures, and decide whether this prompt is ready for optimization.
+          </p>
+        </div>
+      </div>
+      <span v-if="run.status" :class="['status-badge', run.status]">{{ run.status }}</span>
     </header>
 
-    <div v-if="loading" class="loading">Loading results...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-if="loading" class="loading-state">Loading results...</div>
+    <div v-else-if="error" class="error-state">{{ error }}</div>
 
     <template v-else>
-      <!-- Before/After Comparison (shown when this is a re-test run) -->
-      <div v-if="parentRun" class="before-after">
-        <h2>Before / After Comparison</h2>
-        <div class="ba-grid">
-          <div class="ba-card before">
-            <span class="ba-label">Before (Original)</span>
-            <span class="ba-score" :class="baScoreClass(parentRun.overall_score)">{{ parentRun.overall_score ?? '—' }}%</span>
-            <div class="ba-stats">
-              <span class="pass">{{ parentRun.passed }} pass</span>
-              <span class="partial">{{ parentRun.partial }} partial</span>
-              <span class="fail">{{ parentRun.failed }} fail</span>
+      <section class="results-hero surface-card">
+        <div class="hero-top">
+          <div>
+            <span class="eyebrow">Run summary</span>
+            <h2 class="hero-score-title">Overall performance</h2>
+          </div>
+          <div class="hero-score-block">
+            <span class="hero-score" :class="scoreClass">{{ run.overall_score ?? '—' }}%</span>
+            <span class="muted">{{ results.length }} evaluated scenarios</span>
+          </div>
+        </div>
+
+        <div v-if="parentRun" class="before-after">
+          <div class="before-after-header">
+            <h3>Before / After Comparison</h3>
+            <span class="badge">{{ scoreDelta > 0 ? 'Improving' : scoreDelta < 0 ? 'Regression' : 'Flat' }}</span>
+          </div>
+          <div class="ba-grid">
+            <div class="ba-card">
+              <span class="ba-label">Before</span>
+              <span class="ba-score" :class="baScoreClass(parentRun.overall_score)">{{ parentRun.overall_score ?? '—' }}%</span>
+              <div class="ba-stats">
+                <span class="pass">{{ parentRun.passed }} pass</span>
+                <span class="partial">{{ parentRun.partial }} partial</span>
+                <span class="fail">{{ parentRun.failed }} fail</span>
+              </div>
             </div>
-          </div>
-          <div class="ba-arrow">→</div>
-          <div class="ba-card after">
-            <span class="ba-label">After (Optimized)</span>
-            <span class="ba-score" :class="baScoreClass(run.overall_score)">{{ run.overall_score ?? '—' }}%</span>
-            <div class="ba-stats">
-              <span class="pass">{{ run.passed }} pass</span>
-              <span class="partial">{{ run.partial }} partial</span>
-              <span class="fail">{{ run.failed }} fail</span>
+            <div class="ba-card">
+              <span class="ba-label">After</span>
+              <span class="ba-score" :class="baScoreClass(run.overall_score)">{{ run.overall_score ?? '—' }}%</span>
+              <div class="ba-stats">
+                <span class="pass">{{ run.passed }} pass</span>
+                <span class="partial">{{ run.partial }} partial</span>
+                <span class="fail">{{ run.failed }} fail</span>
+              </div>
             </div>
-          </div>
-          <div class="ba-delta" :class="deltaClass">
-            {{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}% {{ scoreDelta > 0 ? 'improvement' : scoreDelta < 0 ? 'regression' : 'no change' }}
-          </div>
-        </div>
-        <div v-if="confidence" class="confidence-banner" :class="confidence.level">
-          <span class="confidence-label">Deployment Confidence: {{ confidence.level.toUpperCase() }}</span>
-          <span class="confidence-detail">{{ confidence.detail }}</span>
-        </div>
-      </div>
-
-      <!-- KPI Dashboard -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <span class="kpi-value" :class="scoreClass">{{ run.overall_score ?? '—' }}%</span>
-          <span class="kpi-label">Overall Score</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-value pass">{{ run.passed }}</span>
-          <span class="kpi-label">Passed</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-value partial">{{ run.partial }}</span>
-          <span class="kpi-label">Partial</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-value fail">{{ run.failed }}</span>
-          <span class="kpi-label">Failed</span>
-        </div>
-      </div>
-
-      <!-- Results list -->
-      <div v-for="tc in testCases" :key="tc.id" class="result-card" @click="toggleExpand(tc.id)">
-        <div class="result-header">
-          <span class="tc-category">{{ tc.category }}</span>
-          <span class="result-scenario">{{ tc.scenario }}</span>
-          <span v-if="getResult(tc.id)" :class="['verdict-badge', getResult(tc.id).verdict]">
-            {{ getResult(tc.id).verdict }} — {{ getResult(tc.id).overall_score }}%
-          </span>
-        </div>
-
-        <div v-if="expanded === tc.id && getResult(tc.id)" class="result-detail">
-          <div class="criteria-results">
-            <h4>Criteria Results</h4>
-            <div v-for="(cr, i) in getResult(tc.id).criteria_results" :key="i" class="criterion-result">
-              <span :class="['cr-badge', cr.passed ? 'pass' : 'fail']">{{ cr.passed ? 'PASS' : 'FAIL' }}</span>
-              <span>{{ cr.description }}</span>
-              <p v-if="cr.reasoning" class="cr-reasoning">{{ cr.reasoning }}</p>
-              <p v-if="cr.suggestion && !cr.passed" class="cr-suggestion">Fix: {{ cr.suggestion }}</p>
+            <div class="ba-delta" :class="deltaClass">
+              {{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}% {{ scoreDelta > 0 ? 'improvement' : scoreDelta < 0 ? 'regression' : 'no change' }}
             </div>
           </div>
 
-          <div class="conversation">
-            <h4>Conversation ({{ getResult(tc.id).turn_count }} turns)</h4>
-            <div v-for="(turn, i) in getResult(tc.id).conversation" :key="i" :class="['turn', turn.role]">
-              <span class="turn-role">{{ turn.role === 'agent' ? 'Agent' : 'Caller' }}</span>
-              <p>{{ turn.content }}</p>
+          <div v-if="confidence" class="confidence-banner" :class="confidence.level">
+            <span class="confidence-label">Deployment confidence: {{ confidence.level.toUpperCase() }}</span>
+            <span class="confidence-detail">{{ confidence.detail }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="kpi-grid">
+        <div class="stat-card kpi-card">
+          <span class="eyebrow">Overall Score</span>
+          <strong class="kpi-value" :class="scoreClass">{{ run.overall_score ?? '—' }}%</strong>
+          <span class="muted">Weighted performance across all criteria</span>
+        </div>
+        <div class="stat-card kpi-card">
+          <span class="eyebrow">Passed</span>
+          <strong class="kpi-value pass">{{ run.passed }}</strong>
+          <span class="muted">Scenarios meeting expectations</span>
+        </div>
+        <div class="stat-card kpi-card">
+          <span class="eyebrow">Partial</span>
+          <strong class="kpi-value partial">{{ run.partial }}</strong>
+          <span class="muted">Scenarios needing refinement</span>
+        </div>
+        <div class="stat-card kpi-card">
+          <span class="eyebrow">Failed</span>
+          <strong class="kpi-value fail">{{ run.failed }}</strong>
+          <span class="muted">Scenarios blocking deployment</span>
+        </div>
+      </section>
+
+      <section class="stack">
+        <div
+          v-for="tc in testCases"
+          :key="tc.id"
+          class="section-card result-card"
+          @click="toggleExpand(tc.id)"
+        >
+          <div class="result-header">
+            <div class="result-main">
+              <span class="badge tc-category">{{ formatCategory(tc.category) }}</span>
+              <span class="result-scenario">{{ tc.scenario }}</span>
+            </div>
+            <div class="result-status">
+              <span v-if="getResult(tc.id)" :class="['status-badge', getResult(tc.id).verdict]">
+                {{ getResult(tc.id).verdict }} {{ getResult(tc.id).overall_score }}%
+              </span>
+              <span class="expand-indicator">{{ expanded === tc.id ? '−' : '+' }}</span>
+            </div>
+          </div>
+
+          <div v-if="expanded === tc.id && getResult(tc.id)" class="result-detail">
+            <div class="criteria-results">
+              <h4>Criteria Results</h4>
+              <div v-for="(cr, i) in getResult(tc.id).criteria_results" :key="i" class="criterion-result">
+                <span :class="['status-badge', cr.passed ? 'pass' : 'fail']">
+                  {{ cr.passed ? 'PASS' : 'FAIL' }}
+                </span>
+                <span class="criterion-copy">{{ cr.description }}</span>
+                <p v-if="cr.reasoning" class="cr-reasoning">{{ cr.reasoning }}</p>
+                <p v-if="cr.suggestion && !cr.passed" class="cr-suggestion">Fix: {{ cr.suggestion }}</p>
+              </div>
+            </div>
+
+            <div class="conversation">
+              <h4>Conversation ({{ getResult(tc.id).turn_count }} turns)</h4>
+              <div v-for="(turn, i) in getResult(tc.id).conversation" :key="i" :class="['turn', turn.role]">
+                <span class="turn-role">{{ turn.role === 'agent' ? 'Agent' : 'Caller' }}</span>
+                <p>{{ turn.content }}</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Actions -->
-      <div class="results-actions">
+      <section class="section-card results-actions">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Next step</h2>
+            <p class="section-copy">Generate an optimized prompt based on the failures surfaced in this run.</p>
+          </div>
+        </div>
         <button class="btn-primary" @click="generateOptimization" :disabled="optimizing">
           {{ optimizing ? 'Generating...' : 'Generate Optimization →' }}
         </button>
-      </div>
+      </section>
     </template>
   </div>
 </template>
@@ -204,6 +249,10 @@ function toggleExpand(id) {
 
 const optimizing = ref(false);
 
+function formatCategory(category) {
+  return category.replace(/_/g, ' ');
+}
+
 async function generateOptimization() {
   optimizing.value = true;
   try {
@@ -224,324 +273,384 @@ async function generateOptimization() {
 </script>
 
 <style scoped>
-.test-results {
-  padding: 32px 40px;
-  max-width: 960px;
-  margin: 0 auto;
+.results-page-header {
+  margin-bottom: 4px;
 }
 
-.results-header {
+.results-back-btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.results-hero {
+  padding: 28px;
+  border-radius: 28px;
+}
+
+.hero-top {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.results-header h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-}
-
-.back-btn {
-  background: none;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #374151;
-}
-
-.back-btn:hover { background: #f9fafb; }
-
-.loading, .error {
-  text-align: center;
-  padding: 60px 0;
-  color: #6b7280;
-  font-size: 15px;
-}
-
-.error { color: #dc2626; }
-
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.kpi-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  text-align: center;
-}
-
-.kpi-value {
-  display: block;
-  font-size: 28px;
-  font-weight: 700;
-}
-
-.kpi-value.pass { color: #059669; }
-.kpi-value.partial { color: #d97706; }
-.kpi-value.fail { color: #dc2626; }
-
-.kpi-label {
-  display: block;
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-}
-
-.result-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-.result-card:hover { border-color: #93c5fd; }
-
-.result-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.tc-category {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  background: #ede9fe;
-  color: #5b21b6;
-}
-
-.result-scenario { flex: 1; }
-
-.verdict-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-.verdict-badge.pass { background: #d1fae5; color: #065f46; }
-.verdict-badge.partial { background: #fef3c7; color: #92400e; }
-.verdict-badge.fail { background: #fee2e2; color: #991b1b; }
-
-.result-detail {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f3f4f6;
-}
-
-.result-detail h4 {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 8px 0;
-}
-
-.criterion-result {
-  padding: 6px 0;
-  font-size: 13px;
-  display: flex;
+  justify-content: space-between;
   align-items: flex-start;
+  gap: 16px;
+}
+
+.hero-score-title {
+  margin-top: 8px;
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+}
+
+.hero-score-block {
+  display: grid;
   gap: 8px;
-  flex-wrap: wrap;
+  justify-items: end;
 }
 
-.cr-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
+.hero-score {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(3rem, 2.4rem + 1.5vw, 4rem);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+  font-weight: 700;
 }
 
-.cr-badge.pass { background: #d1fae5; color: #065f46; }
-.cr-badge.fail { background: #fee2e2; color: #991b1b; }
-
-.cr-reasoning {
-  width: 100%;
-  font-size: 12px;
-  color: #6b7280;
-  margin: 2px 0 0 36px;
-  font-style: italic;
+.hero-score.pass,
+.kpi-value.pass,
+.ba-score.pass {
+  color: var(--success);
 }
 
-.cr-suggestion {
-  width: 100%;
-  font-size: 12px;
-  color: #1e40af;
-  background: #eff6ff;
-  border-left: 3px solid #3b82f6;
-  padding: 4px 8px;
-  margin: 4px 0 0 36px;
-  border-radius: 0 4px 4px 0;
+.hero-score.partial,
+.kpi-value.partial,
+.ba-score.partial {
+  color: var(--warning);
 }
 
-.conversation {
-  margin-top: 16px;
+.hero-score.fail,
+.kpi-value.fail,
+.ba-score.fail {
+  color: var(--danger);
 }
 
-.turn {
-  padding: 8px 12px;
-  margin-bottom: 6px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.turn.agent { background: #eff6ff; }
-.turn.caller { background: #f9fafb; }
-
-.turn-role {
-  font-size: 11px;
-  font-weight: 600;
-  color: #6b7280;
-  display: block;
-  margin-bottom: 2px;
-}
-
-.turn p { margin: 0; color: #374151; }
-
-.results-actions {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-primary:hover { background: #2563eb; }
-
-/* Before/After Comparison */
 .before-after {
-  margin-bottom: 24px;
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
   padding: 20px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(237, 244, 255, 0.94), rgba(255, 255, 255, 0.9));
+  border: 1px solid rgba(37, 99, 235, 0.14);
 }
 
-.before-after h2 {
-  font-size: 16px;
+.before-after-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.before-after-header h3 {
+  font-size: 1rem;
   font-weight: 600;
-  color: #111827;
-  margin: 0 0 16px 0;
 }
 
 .ba-grid {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  flex-wrap: wrap;
 }
 
 .ba-card {
-  flex: 1;
-  min-width: 180px;
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
-  text-align: center;
-  border: 1px solid #e5e7eb;
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border-soft);
 }
 
 .ba-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  margin-bottom: 8px;
+  font-size: 0.76rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 700;
 }
 
 .ba-score {
-  display: block;
-  font-size: 32px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.2rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
   font-weight: 700;
 }
-
-.ba-score.pass { color: #059669; }
-.ba-score.partial { color: #d97706; }
-.ba-score.fail { color: #dc2626; }
 
 .ba-stats {
   display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 8px;
-  font-size: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
 }
 
-.ba-stats .pass { color: #059669; }
-.ba-stats .partial { color: #d97706; }
-.ba-stats .fail { color: #dc2626; }
+.ba-stats .pass {
+  color: var(--success);
+}
 
-.ba-arrow {
-  font-size: 24px;
-  color: #9ca3af;
-  font-weight: 700;
+.ba-stats .partial {
+  color: var(--warning);
+}
+
+.ba-stats .fail {
+  color: var(--danger);
 }
 
 .ba-delta {
-  width: 100%;
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border-radius: 18px;
   text-align: center;
-  font-size: 16px;
   font-weight: 700;
-  padding: 8px;
-  border-radius: 8px;
-  margin-top: 4px;
 }
 
-.ba-delta.positive { color: #059669; background: #d1fae5; }
-.ba-delta.negative { color: #dc2626; background: #fee2e2; }
-.ba-delta.neutral { color: #6b7280; background: #f3f4f6; }
+.ba-delta.positive {
+  background: rgba(15, 159, 110, 0.12);
+  color: #0d7a55;
+}
+
+.ba-delta.negative {
+  background: rgba(209, 67, 67, 0.12);
+  color: #b42323;
+}
+
+.ba-delta.neutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+}
 
 .confidence-banner {
-  margin-top: 12px;
-  padding: 10px 16px;
-  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.confidence-banner.high {
+  background: rgba(15, 159, 110, 0.1);
+  border: 1px solid rgba(15, 159, 110, 0.14);
+}
+
+.confidence-banner.medium {
+  background: rgba(194, 122, 11, 0.1);
+  border: 1px solid rgba(194, 122, 11, 0.14);
+}
+
+.confidence-banner.low {
+  background: rgba(209, 67, 67, 0.1);
+  border: 1px solid rgba(209, 67, 67, 0.14);
+}
+
+.confidence-label {
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.confidence-detail {
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kpi-card {
+  gap: 8px;
+}
+
+.kpi-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.result-card {
+  cursor: pointer;
+  transition:
+    transform var(--ease-standard),
+    border-color var(--ease-standard),
+    box-shadow var(--ease-standard);
+}
+
+.result-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.result-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tc-category {
+  text-transform: capitalize;
+}
+
+.result-scenario {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.result-status {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.confidence-banner.high { background: #d1fae5; border: 1px solid #86efac; }
-.confidence-banner.medium { background: #fef3c7; border: 1px solid #fcd34d; }
-.confidence-banner.low { background: #fee2e2; border: 1px solid #fca5a5; }
-
-.confidence-label {
-  font-size: 13px;
-  font-weight: 700;
+.expand-indicator {
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  line-height: 1;
 }
 
-.confidence-banner.high .confidence-label { color: #065f46; }
-.confidence-banner.medium .confidence-label { color: #92400e; }
-.confidence-banner.low .confidence-label { color: #991b1b; }
+.result-detail {
+  display: grid;
+  gap: 20px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
 
-.confidence-detail {
-  font-size: 13px;
-  color: #374151;
+.criteria-results h4,
+.conversation h4 {
+  margin-bottom: 12px;
+  font-size: 0.96rem;
+  font-weight: 600;
+}
+
+.criterion-result {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.74);
+  margin-bottom: 10px;
+}
+
+.criterion-copy {
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.cr-reasoning {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.cr-suggestion {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(237, 244, 255, 0.88);
+  color: var(--accent-strong);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.conversation {
+  display: grid;
+  gap: 12px;
+}
+
+.turn {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.turn.agent {
+  background: rgba(237, 244, 255, 0.88);
+}
+
+.turn.caller {
+  background: rgba(248, 250, 252, 0.84);
+}
+
+.turn-role {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.turn p {
+  color: var(--text-secondary);
+}
+
+.results-actions {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .hero-top,
+  .before-after-header,
+  .result-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-score-block {
+    justify-items: start;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ba-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .results-hero {
+    padding: 22px 20px;
+    border-radius: 24px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .result-main,
+  .result-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

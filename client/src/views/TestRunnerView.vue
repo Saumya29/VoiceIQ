@@ -1,82 +1,119 @@
 <template>
-  <div class="test-runner">
-    <header class="runner-header">
-      <button class="back-btn" @click="$router.push({ path: `/agents/${agentId}`, query: { locationId: session.locationId } })">← Back</button>
-      <h1>Test Runner</h1>
+  <div class="page-shell page-shell-narrow stack">
+    <header class="page-header runner-page-header">
+      <div class="page-header-main">
+        <button class="btn runner-back-btn" @click="$router.push({ path: `/agents/${agentId}`, query: { locationId: session.locationId } })">← Back</button>
+        <div>
+          <span class="page-kicker">Testing flywheel</span>
+          <h1 class="page-heading">Test Runner</h1>
+          <p class="page-subtitle">
+            Generate high-signal scenarios, review the synthetic callers, and execute the full
+            validation run against this agent.
+          </p>
+        </div>
+      </div>
+      <span v-if="retestRunId" class="badge">Re-test run</span>
     </header>
 
-    <!-- Retest loading -->
-    <div v-if="phase === 'loading'" class="loading">Creating re-test run...</div>
+    <section class="stepper-shell surface-card">
+      <div
+        v-for="step in phaseSteps"
+        :key="step.id"
+        :class="['step-item', { active: activeStep === step.id, complete: completedSteps.includes(step.id) }]"
+      >
+        <span class="step-index">{{ step.index }}</span>
+        <div>
+          <strong>{{ step.title }}</strong>
+          <p>{{ step.copy }}</p>
+        </div>
+      </div>
+    </section>
 
-    <!-- Phase 1: Config -->
-    <div v-if="phase === 'config'" class="phase-config">
-      <h2>Configure Test Generation</h2>
-      <p class="phase-desc">Select test categories and how many cases to generate per category.</p>
+    <div v-if="phase === 'loading'" class="loading-state">Creating re-test run...</div>
 
-      <div class="config-section">
-        <label class="config-label">Categories</label>
-        <div class="checkbox-group">
-          <label v-for="cat in availableCategories" :key="cat.id" class="checkbox-item">
+    <div v-if="phase === 'config'" class="stack">
+      <section class="section-card stack">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Configure test generation</h2>
+            <p class="section-copy">Choose the scenario mix and how much coverage you want per category.</p>
+          </div>
+        </div>
+
+        <div class="category-grid">
+          <label v-for="cat in availableCategories" :key="cat.id" class="category-tile">
             <input type="checkbox" v-model="selectedCategories" :value="cat.id" />
-            <span>
+            <span class="category-check">{{ selectedCategories.includes(cat.id) ? '✓' : '' }}</span>
+            <span class="category-copy">
               <strong>{{ cat.label }}</strong>
               <small>{{ cat.description }}</small>
             </span>
           </label>
         </div>
-      </div>
 
-      <div class="config-section">
-        <label class="config-label">Cases per category</label>
-        <select v-model="casesPerCategory" class="config-select">
-          <option :value="1">1</option>
-          <option :value="2">2</option>
-          <option :value="3">3</option>
-          <option :value="5">5</option>
-        </select>
-      </div>
+        <div class="config-controls">
+          <div class="config-select-card">
+            <label class="config-label">Cases per category</label>
+            <select v-model="casesPerCategory" class="config-select">
+              <option :value="1">1</option>
+              <option :value="2">2</option>
+              <option :value="3">3</option>
+              <option :value="5">5</option>
+            </select>
+          </div>
+          <div class="stat-card config-summary">
+            <span class="eyebrow">Projected run</span>
+            <strong>{{ selectedCategories.length * casesPerCategory }}</strong>
+            <span class="muted">test cases across {{ selectedCategories.length }} categories</span>
+          </div>
+        </div>
 
-      <div class="config-summary">
-        Total: {{ selectedCategories.length * casesPerCategory }} test cases across {{ selectedCategories.length }} categories
-      </div>
+        <div class="config-actions">
+          <button
+            class="btn-primary"
+            @click="generateTests"
+            :disabled="generating || selectedCategories.length === 0"
+          >
+            {{ generating ? 'Generating...' : 'Generate Test Cases' }}
+          </button>
+        </div>
+      </section>
 
-      <button
-        class="btn-primary"
-        @click="generateTests"
-        :disabled="generating || selectedCategories.length === 0"
-      >
-        {{ generating ? 'Generating...' : 'Generate Test Cases' }}
-      </button>
-      <div v-if="generateError" class="error">{{ generateError }}</div>
+      <div v-if="generateError" class="error-state">{{ generateError }}</div>
     </div>
 
-    <!-- Phase 2: Review -->
-    <div v-if="phase === 'review'" class="phase-review">
-      <div class="review-header">
-        <h2>Review Test Cases ({{ testCases.length }})</h2>
-        <p class="phase-desc">Review and edit generated test cases before execution.</p>
-      </div>
+    <div v-if="phase === 'review'" class="stack">
+      <section class="section-card review-hero">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Review test cases ({{ testCases.length }})</h2>
+            <p class="section-copy">Tighten the generated scenarios before you start execution.</p>
+          </div>
+          <span class="badge">{{ testCases.length }} total</span>
+        </div>
+      </section>
 
-      <div v-for="tc in testCases" :key="tc.id" class="test-case-card">
+      <section v-for="tc in testCases" :key="tc.id" class="section-card test-case-card">
         <div class="tc-header">
-          <span class="tc-category">{{ tc.category }}</span>
-          <button class="edit-toggle" @click="toggleEdit(tc.id)">
+          <span class="badge tc-category">{{ formatCategory(tc.category) }}</span>
+          <button class="btn edit-toggle" @click="toggleEdit(tc.id)">
             {{ editing === tc.id ? 'Done' : 'Edit' }}
           </button>
         </div>
 
         <template v-if="editing !== tc.id">
-          <h4>{{ tc.scenario }}</h4>
+          <h3 class="tc-scenario">{{ tc.scenario }}</h3>
           <div class="tc-persona">
             <strong>{{ tc.persona?.name }}</strong> — {{ tc.persona?.personality }}
             <p>{{ tc.persona?.background }}</p>
             <p><em>Goal: {{ tc.persona?.goal }}</em></p>
           </div>
-          <div class="tc-opening">
-            <span class="label">Opening:</span> "{{ tc.opening_message }}"
+          <div class="tc-block">
+            <span class="eyebrow">Opening message</span>
+            <p>"{{ tc.opening_message }}"</p>
           </div>
-          <div class="tc-criteria">
-            <span class="label">Criteria ({{ tc.success_criteria?.length }}):</span>
+          <div class="tc-block">
+            <span class="eyebrow">Success criteria ({{ tc.success_criteria?.length }})</span>
             <div v-for="(c, i) in tc.success_criteria" :key="i" class="criterion">
               {{ c.description }} <span class="weight">({{ (c.weight * 100).toFixed(0) }}%)</span>
             </div>
@@ -98,7 +135,7 @@
             <button class="btn-secondary" @click="saveEdit(tc)">Save Changes</button>
           </div>
         </template>
-      </div>
+      </section>
 
       <div class="review-actions">
         <button class="btn-primary" @click="startExecution">
@@ -108,36 +145,54 @@
       </div>
     </div>
 
-    <!-- Phase 3: Execution -->
-    <div v-if="phase === 'execute'" class="phase-execute">
-      <h2>Executing Tests...</h2>
-      <p class="phase-desc">Running {{ testCases.length }} test cases. Results will appear in real-time.</p>
+    <div v-if="phase === 'execute'" class="stack">
+      <section class="section-card execution-summary">
+        <div class="execution-summary-top">
+          <div>
+            <h2 class="section-title">Executing tests</h2>
+            <p class="section-copy">
+              Running {{ testCases.length }} test cases. Results update here in real time.
+            </p>
+          </div>
+          <div class="execution-metrics">
+            <div class="stat-pill">
+              <strong>{{ completedCount }}</strong>
+              <span>completed</span>
+            </div>
+            <div class="stat-pill">
+              <strong>{{ testCases.length }}</strong>
+              <span>scheduled</span>
+            </div>
+          </div>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
+        </div>
+        <p class="progress-text">{{ completedCount }} / {{ testCases.length }} completed</p>
+      </section>
 
-      <div class="progress-bar-container">
-        <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
-      </div>
-      <p class="progress-text">{{ completedCount }} / {{ testCases.length }} completed</p>
-
-      <div v-for="tc in testCases" :key="tc.id" class="test-case-result">
+      <section v-for="tc in testCases" :key="tc.id" class="section-card test-case-result">
         <div class="tc-result-header">
-          <span class="tc-category">{{ tc.category }}</span>
-          <span>{{ tc.scenario }}</span>
-          <span v-if="getResult(tc.id)" :class="['verdict-badge', getResult(tc.id).verdict]">
+          <div class="tc-result-main">
+            <span class="badge tc-category">{{ formatCategory(tc.category) }}</span>
+            <span class="tc-result-scenario">{{ tc.scenario }}</span>
+          </div>
+          <span v-if="getResult(tc.id)" :class="['status-badge', getResult(tc.id).verdict]">
             {{ getResult(tc.id).verdict }}
           </span>
-          <span v-else-if="executingCaseId === tc.id" class="running-indicator">Running...</span>
-          <span v-else class="pending-indicator">Pending</span>
+          <span v-else-if="executingCaseId === tc.id" class="status-badge running">Running</span>
+          <span v-else class="status-badge pending">Pending</span>
         </div>
         <div v-if="getResult(tc.id)" class="tc-score">
           Score: {{ getResult(tc.id).overall_score }}%
         </div>
-      </div>
+      </section>
 
-      <div v-if="executionDone" class="execution-done">
-        <p>All tests completed!</p>
+      <section v-if="executionDone" class="section-card execution-done">
+        <p>All tests completed.</p>
         <button class="btn-primary" @click="viewResults">View Full Results →</button>
-      </div>
-      <div v-if="executeError" class="error">{{ executeError }}</div>
+      </section>
+      <div v-if="executeError" class="error-state">{{ executeError }}</div>
     </div>
   </div>
 </template>
@@ -193,10 +248,22 @@ const availableCategories = [
   { id: 'escalation', label: 'Escalation', description: 'Scenarios that should trigger escalation' },
 ];
 
+const phaseSteps = [
+  { id: 'config', index: '01', title: 'Configure', copy: 'Choose coverage and scenario categories.' },
+  { id: 'review', index: '02', title: 'Review', copy: 'Refine synthetic callers before execution.' },
+  { id: 'execute', index: '03', title: 'Execute', copy: 'Run the agent and stream results live.' },
+];
+
 const completedCount = computed(() => Object.keys(results.value).length);
 const progressPercent = computed(() =>
   testCases.value.length ? (completedCount.value / testCases.value.length) * 100 : 0
 );
+const activeStep = computed(() => (phase.value === 'loading' ? 'config' : phase.value));
+const completedSteps = computed(() => {
+  if (phase.value === 'review') return ['config'];
+  if (phase.value === 'execute') return ['config', 'review'];
+  return [];
+});
 
 async function generateTests() {
   generating.value = true;
@@ -220,6 +287,10 @@ async function generateTests() {
 
 function toggleEdit(id) {
   editing.value = editing.value === id ? null : id;
+}
+
+function formatCategory(category) {
+  return category.replace(/_/g, ' ');
 }
 
 async function saveEdit(tc) {
@@ -295,314 +366,394 @@ function viewResults() {
 </script>
 
 <style scoped>
-.test-runner {
-  padding: 32px 40px;
-  max-width: 960px;
-  margin: 0 auto;
+.runner-page-header {
+  margin-bottom: 4px;
 }
 
-.runner-header {
+.runner-back-btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.stepper-shell {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 12px;
+  border-radius: 28px;
+}
+
+.step-item {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px;
+  border-radius: 20px;
+  color: var(--text-tertiary);
+  background: rgba(248, 250, 252, 0.62);
+  border: 1px solid transparent;
 }
 
-.runner-header h1 {
-  font-size: 24px;
+.step-item strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.step-item p {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.step-item.active {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(37, 99, 235, 0.18);
+  box-shadow: var(--shadow-sm);
+}
+
+.step-item.complete .step-index {
+  background: rgba(15, 159, 110, 0.16);
+  color: #0d7a55;
+}
+
+.step-index {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #111827;
-  margin: 0;
+  flex: 0 0 auto;
 }
 
-.back-btn {
-  background: none;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 6px 12px;
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.category-tile {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 120px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--border-soft);
+  background: rgba(248, 250, 252, 0.78);
   cursor: pointer;
-  font-size: 13px;
-  color: #374151;
+  transition:
+    transform var(--ease-standard),
+    border-color var(--ease-standard),
+    box-shadow var(--ease-standard),
+    background-color var(--ease-standard);
 }
 
-.back-btn:hover { background: #f9fafb; }
-
-h2 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 4px 0;
+.category-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
-.phase-desc {
-  color: #6b7280;
-  font-size: 14px;
-  margin: 0 0 24px 0;
+.category-tile input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
-/* Config phase */
-.config-section { margin-bottom: 20px; }
+.category-tile:has(input:checked) {
+  background: rgba(237, 244, 255, 0.96);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.category-check {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: transparent;
+  font-size: 0.82rem;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.category-tile:has(input:checked) .category-check {
+  background: var(--accent);
+  color: #fff;
+}
+
+.category-copy strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.category-copy small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.config-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.config-select-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--border-soft);
+  background: rgba(248, 250, 252, 0.78);
+}
 
 .config-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.checkbox-group { display: flex; flex-direction: column; gap: 8px; }
-
-.checkbox-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.checkbox-item input { margin-top: 3px; }
-
-.checkbox-item strong { display: block; font-size: 14px; color: #111827; }
-.checkbox-item small { display: block; font-size: 12px; color: #6b7280; }
-
-.config-select {
-  padding: 8px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 14px;
+.config-select,
+.edit-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
 }
 
 .config-summary {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 16px;
-  padding: 8px 12px;
-  background: #f9fafb;
-  border-radius: 8px;
+  gap: 8px;
 }
 
-/* Review phase */
-.review-header { margin-bottom: 16px; }
+.config-summary strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.config-actions,
+.review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
 .test-case-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
+  gap: 18px;
 }
 
 .tc-header {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 8px;
 }
 
 .tc-category {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  background: #ede9fe;
-  color: #5b21b6;
+  text-transform: capitalize;
 }
 
 .edit-toggle {
-  background: none;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  color: #374151;
+  width: auto;
 }
 
-.edit-toggle:hover { background: #f9fafb; }
-
-.test-case-card h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 8px 0;
+.tc-scenario {
+  font-size: 1.1rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
 }
 
-.tc-persona {
-  font-size: 13px;
-  color: #374151;
-  margin-bottom: 8px;
-  line-height: 1.5;
+.tc-persona,
+.tc-block p {
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
-.tc-persona p { margin: 2px 0; }
-
-.tc-opening, .tc-criteria {
-  font-size: 13px;
-  color: #374151;
-  margin-bottom: 8px;
+.tc-persona p {
+  margin-top: 6px;
 }
 
-.label {
-  font-weight: 600;
-  color: #6b7280;
-  font-size: 12px;
+.tc-block {
+  display: grid;
+  gap: 8px;
 }
 
 .criterion {
-  padding: 4px 0 4px 12px;
-  border-left: 2px solid #e5e7eb;
-  margin: 4px 0;
-  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.76);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
 }
 
 .weight {
-  color: #9ca3af;
-  font-size: 11px;
+  color: var(--text-muted);
 }
 
-/* Edit form */
-.edit-form { display: flex; flex-direction: column; gap: 8px; }
+.edit-form {
+  display: grid;
+  gap: 10px;
+}
 
 .edit-form label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.edit-input {
-  padding: 8px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 13px;
+.execution-summary {
+  position: sticky;
+  top: 12px;
+  z-index: 1;
 }
 
-.review-actions {
+.execution-summary-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.execution-metrics {
   display: flex;
   gap: 12px;
-  margin-top: 20px;
+  flex-wrap: wrap;
 }
 
-/* Execute phase */
+.stat-pill {
+  display: grid;
+  gap: 4px;
+  min-width: 110px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid var(--border-soft);
+}
+
+.stat-pill strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.stat-pill span {
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+}
+
 .progress-bar-container {
-  height: 8px;
-  background: #f3f4f6;
-  border-radius: 4px;
-  margin-bottom: 8px;
+  height: 10px;
+  background: rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .progress-bar {
   height: 100%;
-  background: #3b82f6;
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--accent), #60a5fa);
+  border-radius: 999px;
+  transition: width 220ms ease;
 }
 
 .progress-text {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 20px;
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
 }
 
 .test-case-result {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
+  gap: 10px;
 }
 
 .tc-result-header {
   display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.tc-result-main {
+  display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  flex-wrap: wrap;
 }
 
-.verdict-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  margin-left: auto;
-}
-
-.verdict-badge.pass { background: #d1fae5; color: #065f46; }
-.verdict-badge.partial { background: #fef3c7; color: #92400e; }
-.verdict-badge.fail { background: #fee2e2; color: #991b1b; }
-
-.running-indicator {
-  margin-left: auto;
-  font-size: 12px;
-  color: #3b82f6;
+.tc-result-scenario {
+  color: var(--text-primary);
   font-weight: 500;
-}
-
-.pending-indicator {
-  margin-left: auto;
-  font-size: 12px;
-  color: #9ca3af;
 }
 
 .tc-score {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-  padding-left: 80px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
 }
 
 .execution-done {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
   text-align: center;
-  padding: 24px;
-  margin-top: 16px;
 }
 
 .execution-done p {
-  font-size: 16px;
+  color: var(--success);
+  font-size: 1rem;
   font-weight: 600;
-  color: #059669;
-  margin-bottom: 12px;
 }
 
-.btn-primary {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
+@media (max-width: 900px) {
+  .stepper-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .config-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .execution-summary-top,
+  .tc-result-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
-.btn-primary:hover { background: #2563eb; }
-.btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+@media (max-width: 640px) {
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
 
-.btn-secondary {
-  background: #fff;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-secondary:hover { background: #f9fafb; }
-
-.error {
-  color: #dc2626;
-  font-size: 14px;
-  margin-top: 12px;
-}
-
-.loading {
-  text-align: center;
-  padding: 60px 0;
-  color: #6b7280;
-  font-size: 15px;
+  .tc-header,
+  .tc-result-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

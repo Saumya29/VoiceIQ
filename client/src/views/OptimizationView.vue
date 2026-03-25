@@ -1,42 +1,91 @@
 <template>
-  <div class="optimization-view">
-    <header class="opt-header">
-      <button class="back-btn" @click="$router.back()">← Back</button>
-      <h1>Prompt Optimization</h1>
+  <div class="page-shell stack">
+    <header class="page-header optimization-page-header">
+      <div class="page-header-main">
+        <button class="btn optimization-back-btn" @click="$router.back()">← Back</button>
+        <div>
+          <span class="page-kicker">Optimization review</span>
+          <h1 class="page-heading">Prompt Optimization</h1>
+          <p class="page-subtitle">
+            Review what changed, why it changed, and whether this revision should move forward.
+          </p>
+        </div>
+      </div>
       <span v-if="optimization" :class="['status-badge', optimization.status]">{{ optimization.status }}</span>
     </header>
 
-    <div v-if="loading" class="loading">Loading optimization...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-if="loading" class="loading-state">Loading optimization...</div>
+    <div v-else-if="error" class="error-state">{{ error }}</div>
 
     <template v-else-if="optimization">
-      <!-- Failure Patterns -->
-      <div v-if="optimization.failure_patterns?.length" class="section">
-        <h2>Failure Patterns Addressed</h2>
-        <div v-for="(fp, i) in optimization.failure_patterns" :key="i" class="pattern-card">
-          <span :class="['severity-badge', fp.severity]">{{ fp.severity }}</span>
-          <span>{{ fp.pattern }}</span>
+      <section class="optimization-hero surface-card">
+        <div class="hero-copy">
+          <span class="eyebrow">Optimization status</span>
+          <h2>Prompt rewrite ready for review</h2>
+          <p>
+            Inspect the failure patterns, confirm the change summary, and decide whether to
+            approve, apply, or re-test this prompt.
+          </p>
         </div>
-      </div>
-
-      <!-- Changes Summary -->
-      <div v-if="optimization.changes_summary?.length" class="section">
-        <h2>Changes Made</h2>
-        <div v-for="(change, i) in optimization.changes_summary" :key="i" class="change-item">
-          <span :class="['change-type', change.type]">{{ change.type }}</span>
-          <span>{{ change.description }}</span>
+        <div class="hero-meta">
+          <div class="stat-pill">
+            <strong>{{ optimization.failure_patterns?.length || 0 }}</strong>
+            <span>failure patterns</span>
+          </div>
+          <div class="stat-pill">
+            <strong>{{ optimization.changes_summary?.length || 0 }}</strong>
+            <span>changes proposed</span>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Expected Improvements -->
-      <div v-if="optimization.expected_improvements" class="section">
-        <h2>Expected Improvements</h2>
+      <section v-if="optimization.failure_patterns?.length" class="section-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Failure Patterns Addressed</h2>
+            <p class="section-copy">The behaviors this optimization attempts to correct.</p>
+          </div>
+        </div>
+        <div class="stack-sm">
+          <div v-for="(fp, i) in optimization.failure_patterns" :key="i" class="pattern-card">
+            <span :class="['status-badge', fp.severity]">{{ fp.severity }}</span>
+            <span>{{ fp.pattern }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="optimization.changes_summary?.length" class="section-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Changes Made</h2>
+            <p class="section-copy">A concise breakdown of the edits proposed by the optimizer.</p>
+          </div>
+        </div>
+        <div class="stack-sm">
+          <div v-for="(change, i) in optimization.changes_summary" :key="i" class="change-item">
+            <span :class="['status-badge', change.type]">{{ change.type }}</span>
+            <span>{{ change.description }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="optimization.expected_improvements" class="section-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Expected Improvements</h2>
+            <p class="section-copy">What should improve when this prompt is re-tested.</p>
+          </div>
+        </div>
         <p class="improvements-text">{{ optimization.expected_improvements }}</p>
-      </div>
+      </section>
 
-      <!-- Side-by-side Diff -->
-      <div class="section">
-        <h2>Prompt Diff</h2>
+      <section class="section-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Prompt Diff</h2>
+            <p class="section-copy">Side-by-side comparison of the original prompt and the optimized draft.</p>
+          </div>
+        </div>
         <div class="diff-container">
           <div class="diff-panel">
             <h3>Original</h3>
@@ -47,29 +96,52 @@
             <pre class="diff-content optimized"><template v-for="(part, i) in rightParts" :key="i"><span :class="part.type">{{ part.text }}</span></template></pre>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Actions -->
-      <div class="actions" v-if="optimization.status === 'generated'">
-        <button class="btn-primary" @click="approve" :disabled="actionLoading">
-          {{ actionLoading ? 'Processing...' : 'Approve' }}
-        </button>
-        <button class="btn-danger" @click="reject" :disabled="actionLoading">Reject</button>
-      </div>
+      <section class="section-card actions-card" v-if="optimization.status === 'generated'">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Decision</h2>
+            <p class="section-copy">Approve this prompt for application, or reject it and keep the current one.</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn-primary" @click="approve" :disabled="actionLoading">
+            {{ actionLoading ? 'Processing...' : 'Approve' }}
+          </button>
+          <button class="btn-danger" @click="reject" :disabled="actionLoading">Reject</button>
+        </div>
+      </section>
 
-      <div class="actions" v-if="optimization.status === 'approved'">
-        <button class="btn-primary" @click="apply" :disabled="actionLoading">
-          {{ actionLoading ? 'Applying...' : 'Apply to HighLevel' }}
-        </button>
-        <button class="btn-secondary" @click="retest">Re-test with Optimized Prompt →</button>
-      </div>
+      <section class="section-card actions-card" v-if="optimization.status === 'approved'">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Ready to apply</h2>
+            <p class="section-copy">Push the approved prompt into HighLevel or re-test it before deployment.</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn-primary" @click="apply" :disabled="actionLoading">
+            {{ actionLoading ? 'Applying...' : 'Apply to HighLevel' }}
+          </button>
+          <button class="btn-secondary" @click="retest">Re-test with Optimized Prompt →</button>
+        </div>
+      </section>
 
-      <div class="actions" v-if="optimization.status === 'applied'">
-        <p class="applied-msg">Optimization applied to HighLevel.</p>
-        <button class="btn-secondary" @click="retest">Re-test with Optimized Prompt →</button>
-      </div>
+      <section class="section-card actions-card" v-if="optimization.status === 'applied'">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Applied successfully</h2>
+            <p class="section-copy">The optimized prompt is now live in HighLevel.</p>
+          </div>
+        </div>
+        <div class="actions">
+          <p class="applied-msg">Optimization applied to HighLevel.</p>
+          <button class="btn-secondary" @click="retest">Re-test with Optimized Prompt →</button>
+        </div>
+      </section>
 
-      <div v-if="actionError" class="error">{{ actionError }}</div>
+      <div v-if="actionError" class="error-state">{{ actionError }}</div>
     </template>
   </div>
 </template>
@@ -174,235 +246,182 @@ function retest() {
 </script>
 
 <style scoped>
-.optimization-view {
-  padding: 32px 40px;
-  max-width: 1100px;
-  margin: 0 auto;
+.optimization-page-header {
+  margin-bottom: 4px;
 }
 
-.opt-header {
+.optimization-back-btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.optimization-hero {
   display: flex;
+  justify-content: space-between;
+  gap: 24px;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
+  padding: 28px;
+  border-radius: 28px;
 }
 
-.opt-header h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
+.hero-copy h2 {
+  margin: 8px 0 10px;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
 }
 
-.back-btn {
-  background: none;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #374151;
+.hero-copy p {
+  max-width: 60ch;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
-.back-btn:hover { background: #f9fafb; }
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 8px;
-  text-transform: uppercase;
-  margin-left: auto;
+.hero-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.status-badge.generated { background: #dbeafe; color: #1e40af; }
-.status-badge.approved { background: #d1fae5; color: #065f46; }
-.status-badge.applied { background: #d1fae5; color: #065f46; }
-.status-badge.rejected { background: #fee2e2; color: #991b1b; }
-
-.loading, .error {
-  text-align: center;
-  padding: 60px 0;
-  color: #6b7280;
-  font-size: 15px;
+.stat-pill {
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.86);
+  border: 1px solid var(--border-soft);
 }
 
-.error { color: #dc2626; }
-
-.section {
-  margin-bottom: 24px;
+.stat-pill strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
-.section h2 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 12px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f3f4f6;
+.stat-pill span {
+  color: var(--text-tertiary);
+  font-size: 0.84rem;
+}
+
+.pattern-card,
+.change-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
 }
 
 .pattern-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: #fffbeb;
-  border-left: 3px solid #fbbf24;
-  margin-bottom: 8px;
-  font-size: 13px;
-  border-radius: 0 6px 6px 0;
+  background: rgba(255, 246, 232, 0.78);
 }
-
-.severity-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-.severity-badge.high { background: #fee2e2; color: #991b1b; }
-.severity-badge.medium { background: #fef3c7; color: #92400e; }
-.severity-badge.low { background: #f3f4f6; color: #6b7280; }
-
-.change-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 13px;
-  color: #374151;
-}
-
-.change-type {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-.change-type.added { background: #d1fae5; color: #065f46; }
-.change-type.modified { background: #dbeafe; color: #1e40af; }
-.change-type.removed { background: #fee2e2; color: #991b1b; }
 
 .improvements-text {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.6;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin: 0;
+  padding: 18px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(237, 244, 255, 0.9), rgba(255, 255, 255, 0.88));
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  color: var(--text-secondary);
+  line-height: 1.7;
 }
 
 .diff-container {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
+.diff-panel {
+  min-width: 0;
+}
+
 .diff-panel h3 {
-  font-size: 13px;
-  font-weight: 600;
-  color: #6b7280;
-  margin: 0 0 8px 0;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .diff-content {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  font-size: 12px;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  line-height: 1.7;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid var(--border-soft);
+  border-radius: 22px;
+  padding: 18px;
+  font-size: 0.84rem;
+  font-family: var(--font-mono);
+  line-height: 1.75;
   white-space: pre-wrap;
   word-wrap: break-word;
-  max-height: 600px;
+  max-height: 620px;
   overflow-y: auto;
-  color: #374151;
+  color: var(--text-secondary);
   margin: 0;
 }
 
-.diff-content.original { border-top: 3px solid #fca5a5; }
-.diff-content.optimized { border-top: 3px solid #86efac; }
+.diff-content.original {
+  box-shadow: inset 0 3px 0 rgba(209, 67, 67, 0.28);
+}
+
+.diff-content.optimized {
+  box-shadow: inset 0 3px 0 rgba(15, 159, 110, 0.28);
+}
 
 .diff-content .highlight-removed {
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 3px;
-  padding: 1px 2px;
+  background: rgba(209, 67, 67, 0.14);
+  color: #b42323;
+  border-radius: 6px;
+  padding: 1px 3px;
   text-decoration: line-through;
-  text-decoration-color: #f8717180;
+  text-decoration-color: rgba(180, 35, 35, 0.45);
 }
 
 .diff-content .highlight-added {
-  background: #dcfce7;
-  color: #166534;
-  border-radius: 3px;
-  padding: 1px 2px;
+  background: rgba(15, 159, 110, 0.14);
+  color: #0d7a55;
+  border-radius: 6px;
+  padding: 1px 3px;
 }
 
 .diff-content .unchanged {
-  color: #374151;
+  color: var(--text-secondary);
+}
+
+.actions-card {
+  display: grid;
+  gap: 12px;
 }
 
 .actions {
   display: flex;
-  align-items: center;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+  align-items: center;
 }
-
-.btn-primary {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-primary:hover { background: #2563eb; }
-.btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
-
-.btn-secondary {
-  background: #fff;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-secondary:hover { background: #f9fafb; }
-
-.btn-danger {
-  background: #fff;
-  color: #dc2626;
-  border: 1px solid #fca5a5;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-danger:hover { background: #fef2f2; }
 
 .applied-msg {
-  font-size: 14px;
-  color: #059669;
-  font-weight: 500;
-  margin: 0;
+  color: var(--success);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .optimization-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-meta {
+    justify-content: flex-start;
+  }
+
+  .diff-container {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
