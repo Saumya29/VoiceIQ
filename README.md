@@ -70,6 +70,18 @@ Shows a floating button that opens VoiceIQ in a slide-in panel. Has fullscreen m
 
 For production you'd swap SQLite for PostgreSQL and add Redis for SSE fanout.
 
+## Railway
+
+This repo can be deployed to Railway, but there are a few settings to wire up:
+
+1. For the server service, set the Start Command to `npm run start --workspace=server` if the service root is the repo root.
+2. Set `OPENAI_API_KEY` on the server service.
+3. If the client is deployed as a separate Railway service, set `VITE_API_BASE_URL` on the client to your server URL, for example `https://voiceiq-server-production.up.railway.app`.
+4. Set `CLIENT_BASE_URL` on the server to your client URL, for example `https://voiceiq-client-production.up.railway.app`.
+5. Set `CORS_ORIGINS` on the server to a comma-separated list of allowed browser origins, such as your client and local dev URLs.
+
+The server stores SQLite data on the local filesystem by default, so Railway redeploys will not preserve it permanently.
+
 ## API
 
 **Auth**: `GET /auth/install`, `GET /auth/callback`, `GET /auth/status`

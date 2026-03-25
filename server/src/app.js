@@ -5,23 +5,19 @@ import authRoutes from './auth/auth.routes.js';
 import agentsRoutes from './agents/agents.routes.js';
 import testsRoutes from './tests/tests.routes.js';
 import optimizationsRoutes from './optimizations/optimizations.routes.js';
+import { config } from './config/env.js';
 
 const app = express();
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3001',
-  'https://app.gohighlevel.com',
-  'https://app.leadconnectorhq.com',
-];
-if (process.env.GHL_APP_URL) {
-  allowedOrigins.push(process.env.GHL_APP_URL);
-}
+const allowedOrigins = new Set(config.corsOrigins);
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
 }));

@@ -54,8 +54,7 @@ const AuthController = {
         companyName,
       });
 
-      const appUrl = config.ghl.appUrl || 'http://localhost:5173';
-      res.redirect(`${appUrl}/?locationId=${locationId}`);
+      res.redirect(`${config.clientBaseUrl}/?locationId=${locationId}`);
     } catch (error) {
       console.error('OAuth callback error:', error.response?.data || error.message);
       next(error);

@@ -147,6 +147,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useSessionStore } from '@/stores/session.js';
+import { buildApiUrl } from '../lib/api.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -242,7 +243,9 @@ async function startExecution() {
 
   // Connect to SSE stream
   const runId = testRun.value.id;
-  const eventSource = new EventSource(`/api/v1/tests/runs/${runId}/stream?locationId=${session.locationId}`);
+  const eventSource = new EventSource(
+    buildApiUrl(`/api/v1/tests/runs/${runId}/stream?locationId=${encodeURIComponent(session.locationId)}`)
+  );
 
   eventSource.addEventListener('test_case_started', (e) => {
     const data = JSON.parse(e.data);

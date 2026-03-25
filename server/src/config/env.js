@@ -7,6 +7,17 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const required = ['OPENAI_API_KEY'];
 
+function parseOrigins(value, defaults) {
+  if (!value) {
+    return defaults;
+  }
+
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 for (const key of required) {
   if (!process.env[key]) {
     console.error(`Missing required environment variable: ${key}`);
@@ -18,6 +29,11 @@ export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   databasePath: process.env.DATABASE_PATH || './data/voiceiq.db',
+  clientBaseUrl: process.env.CLIENT_BASE_URL || 'http://localhost:5173',
+  corsOrigins: parseOrigins(process.env.CORS_ORIGINS, [
+    'http://localhost:5173',
+    'http://localhost:3001',
+  ]),
 
   ghl: {
     clientId: process.env.GHL_CLIENT_ID || '',
