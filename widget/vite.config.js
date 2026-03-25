@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  preview: {
+    allowedHosts: true,
+  },
   build: {
     lib: {
       entry: resolve(__dirname, 'src/widget.js'),
