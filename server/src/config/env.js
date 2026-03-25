@@ -6,6 +6,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const required = ['OPENAI_API_KEY'];
+const databasePathFromEnv = process.env.DATABASE_PATH;
+const shouldUseRailwayVolumePath = Boolean(
+  process.env.RAILWAY_VOLUME_MOUNT_PATH
+  && (!databasePathFromEnv || databasePathFromEnv === './data/voiceiq.db')
+);
+const defaultDatabasePath = shouldUseRailwayVolumePath
+  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'voiceiq.db')
+  : (databasePathFromEnv || './data/voiceiq.db');
 
 function parseOrigins(value, defaults) {
   if (!value) {
@@ -28,7 +36,7 @@ for (const key of required) {
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  databasePath: process.env.DATABASE_PATH || './data/voiceiq.db',
+  databasePath: defaultDatabasePath,
   clientBaseUrl: process.env.CLIENT_BASE_URL || 'http://localhost:5173',
   corsOrigins: parseOrigins(process.env.CORS_ORIGINS, [
     'http://localhost:5173',
