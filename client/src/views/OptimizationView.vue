@@ -79,11 +79,12 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { diffWords } from 'diff';
+import { useSessionStore } from '@/stores/session.js';
 
 const route = useRoute();
 const router = useRouter();
 const optimizationId = route.params.optimizationId;
-const locationId = route.query.locationId || 'demo';
+const session = useSessionStore();
 
 const optimization = ref(null);
 const loading = ref(true);
@@ -167,7 +168,7 @@ async function reject() {
 function retest() {
   router.push({
     path: `/agents/${optimization.value.agent_id}/test`,
-    query: { locationId, retestRunId: optimization.value.test_run_id },
+    query: { locationId: session.locationId, retestRunId: optimization.value.test_run_id },
   });
 }
 </script>

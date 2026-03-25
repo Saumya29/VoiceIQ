@@ -7,76 +7,78 @@ import TestCaseDao from './test-case.dao.js';
 import TestResultDao from './test-result.dao.js';
 
 const MAX_TURNS = 10;
+const CONCURRENCY = 3;
 
 const TestExecutor = {
+  async executeOne(runId, agentSystemPrompt, tc, emit) {
+    emit('test_case_started', { testCaseId: tc.id, scenario: tc.scenario });
+
+    TestResultDao.deleteIncomplete(runId, tc.id);
+    const resultId = TestResultDao.create({ testRunId: runId, testCaseId: tc.id });
+
+    try {
+      const conversation = await this.runConversation(agentSystemPrompt, tc);
+      const evaluation = await this.evaluateConversation(
+        conversation, tc.success_criteria, tc.scenario
+      );
+
+      const agentTurns = conversation.filter(t => t.role === 'agent');
+      const wordCounts = agentTurns.map(t => t.content.split(/\s+/).length);
+      const avgWords = Math.round(wordCounts.reduce((a, b) => a + b, 0) / (wordCounts.length || 1));
+      const maxWords = Math.max(...wordCounts, 0);
+      const CONCISE_LIMIT = 80;
+      const conciseScore = maxWords <= CONCISE_LIMIT ? 100 : Math.max(0, 100 - (maxWords - CONCISE_LIMIT) * 2);
+      evaluation.conciseness = { avgWords, maxWords, score: conciseScore };
+
+      TestResultDao.complete(resultId, {
+        conversation,
+        criteriaResults: [...evaluation.criteriaResults, {
+          id: 'conciseness',
+          description: `Response conciseness (avg ${evaluation.conciseness.avgWords} words, max ${evaluation.conciseness.maxWords} words per turn)`,
+          passed: evaluation.conciseness.score >= 70,
+          score: evaluation.conciseness.score,
+          reasoning: evaluation.conciseness.maxWords > CONCISE_LIMIT
+            ? `Longest response was ${evaluation.conciseness.maxWords} words (limit: ${CONCISE_LIMIT}). On a phone call, this would take over 30 seconds to speak.`
+            : `All responses were within the ${CONCISE_LIMIT}-word limit. Good for voice delivery.`,
+          evidence: '',
+        }],
+        overallScore: evaluation.overallScore,
+        verdict: evaluation.verdict,
+        turnCount: conversation.length,
+      });
+
+      TestRunDao.incrementResults(runId, evaluation.verdict);
+
+      emit('test_case_completed', {
+        testCaseId: tc.id,
+        verdict: evaluation.verdict,
+        overall_score: evaluation.overallScore,
+        summary: evaluation.summary,
+      });
+    } catch (err) {
+      TestResultDao.setError(resultId, err.message);
+      TestRunDao.incrementResults(runId, 'fail');
+
+      emit('test_case_completed', {
+        testCaseId: tc.id,
+        verdict: 'fail',
+        overall_score: 0,
+        summary: `Error: ${err.message}`,
+      });
+    }
+  },
+
   async execute(runId, agentSystemPrompt, emit) {
     const testCases = TestCaseDao.listByTestRunId(runId);
     const executedIds = TestResultDao.getExecutedCaseIds(runId);
+    const pending = testCases.filter(tc => !executedIds.includes(tc.id));
 
     TestRunDao.updateStatus(runId, 'running');
 
-    for (const tc of testCases) {
-      // Skip already-executed cases (resume support)
-      if (executedIds.includes(tc.id)) continue;
-
-      emit('test_case_started', { testCaseId: tc.id, scenario: tc.scenario });
-
-      // Clean up any incomplete result rows from a previous crashed run
-      TestResultDao.deleteIncomplete(runId, tc.id);
-
-      const resultId = TestResultDao.create({ testRunId: runId, testCaseId: tc.id });
-
-      try {
-        const conversation = await this.runConversation(agentSystemPrompt, tc);
-        const evaluation = await this.evaluateConversation(
-          conversation, tc.success_criteria, tc.scenario
-        );
-
-        // Add conciseness metric (voice-specific: long responses are bad on phone)
-        const agentTurns = conversation.filter(t => t.role === 'agent');
-        const wordCounts = agentTurns.map(t => t.content.split(/\s+/).length);
-        const avgWords = Math.round(wordCounts.reduce((a, b) => a + b, 0) / (wordCounts.length || 1));
-        const maxWords = Math.max(...wordCounts, 0);
-        const CONCISE_LIMIT = 80; // ~30 seconds of speech
-        const conciseScore = maxWords <= CONCISE_LIMIT ? 100 : Math.max(0, 100 - (maxWords - CONCISE_LIMIT) * 2);
-        evaluation.conciseness = { avgWords, maxWords, score: conciseScore };
-
-        TestResultDao.complete(resultId, {
-          conversation,
-          criteriaResults: [...evaluation.criteriaResults, {
-            id: 'conciseness',
-            description: `Response conciseness (avg ${evaluation.conciseness.avgWords} words, max ${evaluation.conciseness.maxWords} words per turn)`,
-            passed: evaluation.conciseness.score >= 70,
-            score: evaluation.conciseness.score,
-            reasoning: evaluation.conciseness.maxWords > CONCISE_LIMIT
-              ? `Longest response was ${evaluation.conciseness.maxWords} words (limit: ${CONCISE_LIMIT}). On a phone call, this would take over 30 seconds to speak.`
-              : `All responses were within the ${CONCISE_LIMIT}-word limit. Good for voice delivery.`,
-            evidence: '',
-          }],
-          overallScore: evaluation.overallScore,
-          verdict: evaluation.verdict,
-          turnCount: conversation.length,
-        });
-
-        TestRunDao.incrementResults(runId, evaluation.verdict);
-
-        emit('test_case_completed', {
-          testCaseId: tc.id,
-          verdict: evaluation.verdict,
-          overall_score: evaluation.overallScore,
-          summary: evaluation.summary,
-        });
-      } catch (err) {
-        TestResultDao.setError(resultId, err.message);
-        TestRunDao.incrementResults(runId, 'fail');
-
-        emit('test_case_completed', {
-          testCaseId: tc.id,
-          verdict: 'fail',
-          overall_score: 0,
-          summary: `Error: ${err.message}`,
-        });
-      }
+    // Run test cases in parallel batches
+    for (let i = 0; i < pending.length; i += CONCURRENCY) {
+      const batch = pending.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(tc => this.executeOne(runId, agentSystemPrompt, tc, emit)));
     }
 
     const results = TestResultDao.listByTestRunId(runId);

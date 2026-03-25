@@ -1,7 +1,7 @@
 <template>
   <div class="test-runner">
     <header class="runner-header">
-      <button class="back-btn" @click="$router.push({ path: `/agents/${agentId}`, query: { locationId } })">← Back</button>
+      <button class="back-btn" @click="$router.push({ path: `/agents/${agentId}`, query: { locationId: session.locationId } })">← Back</button>
       <h1>Test Runner</h1>
     </header>
 
@@ -146,11 +146,12 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import { useSessionStore } from '@/stores/session.js';
 
 const route = useRoute();
 const router = useRouter();
 const agentId = route.params.agentId;
-const locationId = route.query.locationId || new URLSearchParams(window.location.search).get('locationId') || 'demo';
+const session = useSessionStore();
 const retestRunId = route.query.retestRunId || null;
 
 const phase = ref(retestRunId ? 'loading' : 'config');
@@ -161,7 +162,7 @@ const generateError = ref('');
 onMounted(async () => {
   if (!retestRunId) return;
   try {
-    const res = await axios.post(`/api/v1/tests/runs/${retestRunId}/retest`, { locationId });
+    const res = await axios.post(`/api/v1/tests/runs/${retestRunId}/retest`, { locationId: session.locationId });
     testRun.value = res.data.testRun;
     testCases.value = res.data.testCases;
     phase.value = 'review';
@@ -201,7 +202,7 @@ async function generateTests() {
   generateError.value = '';
   try {
     const res = await axios.post('/api/v1/tests/generate', {
-      locationId,
+      locationId: session.locationId,
       agentId,
       categories: selectedCategories.value,
       casesPerCategory: casesPerCategory.value,
@@ -241,7 +242,7 @@ async function startExecution() {
 
   // Connect to SSE stream
   const runId = testRun.value.id;
-  const eventSource = new EventSource(`/api/v1/tests/runs/${runId}/stream?locationId=${locationId}`);
+  const eventSource = new EventSource(`/api/v1/tests/runs/${runId}/stream?locationId=${session.locationId}`);
 
   eventSource.addEventListener('test_case_started', (e) => {
     const data = JSON.parse(e.data);
@@ -275,7 +276,7 @@ async function startExecution() {
 
   // Trigger execution
   try {
-    await axios.post(`/api/v1/tests/runs/${runId}/execute`, { locationId });
+    await axios.post(`/api/v1/tests/runs/${runId}/execute`, { locationId: session.locationId });
   } catch (err) {
     executeError.value = 'Failed to start execution. ' + (err.response?.data?.error || err.message);
   }
@@ -286,7 +287,7 @@ function getResult(caseId) {
 }
 
 function viewResults() {
-  router.push({ path: `/tests/${testRun.value.id}/results`, query: { locationId } });
+  router.push({ path: `/tests/${testRun.value.id}/results`, query: { locationId: session.locationId } });
 }
 </script>
 

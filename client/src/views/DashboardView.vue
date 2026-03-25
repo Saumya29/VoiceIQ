@@ -8,6 +8,12 @@
       <span v-if="demo" class="demo-badge">Demo Mode</span>
     </header>
 
+    <div v-if="session.isGhlContext && !session.installed" class="install-banner">
+      <p>VoiceIQ needs authorization to access your voice agents.</p>
+      <a href="/auth/install" class="btn-install">Authorize VoiceIQ</a>
+      <p class="install-note">One-time setup. After authorization, your agents will appear here.</p>
+    </div>
+
     <div v-if="loading" class="loading">Loading agents...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
 
@@ -16,7 +22,7 @@
         v-for="agent in agents"
         :key="agent.id"
         class="agent-card"
-        @click="$router.push({ path: `/agents/${agent.id}`, query: { locationId } })"
+        @click="$router.push({ path: `/agents/${agent.id}`, query: { locationId: session.locationId } })"
       >
         <div class="agent-card-header">
           <h3>{{ agent.name }}</h3>
@@ -37,18 +43,18 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import { useSessionStore } from '@/stores/session.js';
 
+const session = useSessionStore();
 const agents = ref([]);
 const loading = ref(true);
 const error = ref('');
 const demo = ref(false);
 
-const locationId = new URLSearchParams(window.location.search).get('locationId') || 'demo';
-
 onMounted(async () => {
   try {
     const res = await axios.get('/api/v1/agents', {
-      params: { locationId },
+      params: { locationId: session.locationId },
     });
     agents.value = res.data.agents;
     demo.value = res.data.demo || false;
@@ -181,5 +187,41 @@ h1 {
   font-size: 12px;
   color: #3b82f6;
   font-weight: 500;
+}
+
+.install-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.install-banner p {
+  color: #1e40af;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.btn-install {
+  display: inline-block;
+  background: #1A56DB;
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+
+.btn-install:hover {
+  background: #1e40af;
+}
+
+.install-note {
+  font-size: 12px;
+  color: #6b7280 !important;
 }
 </style>

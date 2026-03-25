@@ -107,11 +107,12 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import { useSessionStore } from '@/stores/session.js';
 
 const route = useRoute();
 const router = useRouter();
 const runId = route.params.runId;
-const locationId = route.query.locationId || 'demo';
+const session = useSessionStore();
 
 const loading = ref(true);
 const error = ref('');
@@ -208,11 +209,11 @@ async function generateOptimization() {
   try {
     const res = await axios.post('/api/v1/optimizations/generate', {
       runId,
-      locationId,
+      locationId: session.locationId,
     });
     router.push({
       path: `/optimizations/${res.data.optimization.id}`,
-      query: { locationId },
+      query: { locationId: session.locationId },
     });
   } catch (err) {
     alert('Failed to generate optimization: ' + (err.response?.data?.error || err.message));

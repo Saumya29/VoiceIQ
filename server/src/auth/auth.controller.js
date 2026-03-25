@@ -1,4 +1,5 @@
 import axios from 'axios';
+import CryptoJS from 'crypto-js';
 import { config } from '../config/env.js';
 import InstallationsDao from './installations.dao.js';
 
@@ -53,7 +54,8 @@ const AuthController = {
         companyName,
       });
 
-      res.redirect(`http://localhost:5173/?locationId=${locationId}`);
+      const appUrl = config.ghl.appUrl || 'http://localhost:5173';
+      res.redirect(`${appUrl}/?locationId=${locationId}`);
     } catch (error) {
       console.error('OAuth callback error:', error.response?.data || error.message);
       next(error);
@@ -73,6 +75,56 @@ const AuthController = {
       locationId,
       companyName: installation?.company_name || null,
     });
+  },
+
+  // Decrypt GHL SSO payload sent from Custom Page iframe.
+  // GHL encrypts user context with AES using the app's SSO key.
+  // The frontend gets the encrypted payload via postMessage from GHL parent,
+  // then sends it here for server-side decryption (SSO key must never be exposed client-side).
+  async ssoDecrypt(req, res, next) {
+    try {
+      const { encryptedData } = req.body;
+
+      if (!encryptedData) {
+        return res.status(400).json({ error: 'encryptedData is required' });
+      }
+
+      if (!config.ghl.ssoKey) {
+        return res.status(500).json({ error: 'GHL_SSO_KEY not configured' });
+      }
+
+      const decrypted = CryptoJS.AES.decrypt(encryptedData, config.ghl.ssoKey)
+        .toString(CryptoJS.enc.Utf8);
+
+      if (!decrypted) {
+        return res.status(401).json({ error: 'Failed to decrypt SSO data' });
+      }
+
+      const userData = JSON.parse(decrypted);
+      const locationId = userData.activeLocation;
+
+      if (!locationId) {
+        return res.status(400).json({ error: 'No active location in SSO data' });
+      }
+
+      const installation = InstallationsDao.getByLocationId(locationId);
+
+      res.json({
+        success: true,
+        user: {
+          userId: userData.userId,
+          email: userData.email,
+          role: userData.role,
+          companyId: userData.companyId,
+        },
+        locationId,
+        installed: !!installation,
+        companyName: installation?.company_name || null,
+      });
+    } catch (error) {
+      console.error('SSO decrypt error:', error.message);
+      next(error);
+    }
   },
 };
 

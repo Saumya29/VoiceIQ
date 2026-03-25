@@ -25,6 +25,8 @@ export const config = {
     redirectUri: process.env.GHL_REDIRECT_URI || 'http://localhost:3001/auth/callback',
     installUrl: process.env.GHL_INSTALL_URL || '',
     apiBaseUrl: process.env.GHL_API_BASE_URL || 'https://services.leadconnectorhq.com',
+    ssoKey: process.env.GHL_SSO_KEY || '',
+    appUrl: process.env.GHL_APP_URL || '',
   },
 
   openai: {

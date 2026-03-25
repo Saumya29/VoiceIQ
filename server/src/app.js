@@ -8,10 +8,35 @@ import optimizationsRoutes from './optimizations/optimizations.routes.js';
 
 const app = express();
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3001',
+  'https://app.gohighlevel.com',
+  'https://app.leadconnectorhq.com',
+];
+if (process.env.GHL_APP_URL) {
+  allowedOrigins.push(process.env.GHL_APP_URL);
+}
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3001'],
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
+
+// Allow GHL to embed this app in an iframe (Custom Page).
+// frame-ancestors replaces X-Frame-Options and tells browsers which domains can frame us.
+app.use((req, res, next) => {
+  res.removeHeader('X-Frame-Options');
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors 'self' https://app.gohighlevel.com https://app.leadconnectorhq.com http://localhost:*"
+  );
+  next();
+});
+
 app.use(express.json());
 app.use(cookieParser());
 

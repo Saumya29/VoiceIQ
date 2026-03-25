@@ -1,7 +1,7 @@
 <template>
   <div class="agent-detail">
     <header class="detail-header">
-      <button class="back-btn" @click="$router.push({ path: '/', query: { locationId } })">← Back</button>
+      <button class="back-btn" @click="$router.push({ path: '/', query: { locationId: session.locationId } })">← Back</button>
       <div>
         <h1>{{ agent?.name || 'Loading...' }}</h1>
         <p class="subtitle">{{ agent?.businessName }}</p>
@@ -134,7 +134,7 @@
           </div>
 
           <div class="analysis-actions">
-            <button class="btn-primary" @click="$router.push({ path: `/agents/${agentId}/test`, query: { locationId } })">
+            <button class="btn-primary" @click="$router.push({ path: `/agents/${agentId}/test`, query: { locationId: session.locationId } })">
               Generate Tests →
             </button>
             <button class="btn-secondary" @click="runAnalysis">
@@ -153,7 +153,7 @@
         <template v-else>
           <div v-if="testRuns.length" class="history-section">
             <h3>Test Runs ({{ testRuns.length }})</h3>
-            <div v-for="run in testRuns" :key="run.id" class="history-card" @click="$router.push({ path: `/tests/${run.id}/results`, query: { locationId } })">
+            <div v-for="run in testRuns" :key="run.id" class="history-card" @click="$router.push({ path: `/tests/${run.id}/results`, query: { locationId: session.locationId } })">
               <div class="history-card-header">
                 <span :class="['run-status', run.status]">{{ run.status }}</span>
                 <span class="history-date">{{ formatDate(run.created_at) }}</span>
@@ -170,7 +170,7 @@
           </div>
           <div v-if="optimizations.length" class="history-section">
             <h3>Optimizations ({{ optimizations.length }})</h3>
-            <div v-for="opt in optimizations" :key="opt.id" class="history-card" @click="$router.push({ path: `/optimizations/${opt.id}`, query: { locationId } })">
+            <div v-for="opt in optimizations" :key="opt.id" class="history-card" @click="$router.push({ path: `/optimizations/${opt.id}`, query: { locationId: session.locationId } })">
               <div class="history-card-header">
                 <span :class="['opt-status', opt.status]">{{ opt.status }}</span>
                 <span class="history-date">{{ formatDate(opt.created_at) }}</span>
@@ -190,10 +190,11 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
+import { useSessionStore } from '@/stores/session.js';
 
 const route = useRoute();
+const session = useSessionStore();
 const agentId = route.params.agentId;
-const locationId = route.query.locationId || new URLSearchParams(window.location.search).get('locationId') || 'demo';
 
 const agent = ref(null);
 const loadingAgent = ref(true);
@@ -217,7 +218,7 @@ const tabs = [
 onMounted(async () => {
   try {
     const res = await axios.get(`/api/v1/agents/${agentId}`, {
-      params: { locationId },
+      params: { locationId: session.locationId },
     });
     agent.value = res.data.agent;
   } catch (err) {
@@ -252,7 +253,7 @@ async function runAnalysis() {
   analysisError.value = '';
   try {
     const res = await axios.get(`/api/v1/agents/${agentId}/analysis`, {
-      params: { locationId },
+      params: { locationId: session.locationId },
     });
     analysis.value = res.data.analysis;
     activeTab.value = 'analysis';
