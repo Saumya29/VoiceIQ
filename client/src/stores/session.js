@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import axios from 'axios';
 
 export const useSessionStore = defineStore('session', () => {
-  const locationId = ref('demo');
+  const locationId = ref(import.meta.env.VITE_DEFAULT_LOCATION_ID || 'demo');
   const user = ref(null);
   const installed = ref(false);
   const isGhlContext = ref(false);
@@ -63,12 +63,16 @@ export const useSessionStore = defineStore('session', () => {
         }
       }
 
-      // Fallback: read locationId from URL query string
+      // Fallback: read locationId from URL query string or env var default
       const urlLocationId = new URLSearchParams(window.location.search).get('locationId');
       if (urlLocationId) {
         locationId.value = urlLocationId;
+      }
+
+      // Check installation status if we have a real locationId
+      if (locationId.value && locationId.value !== 'demo') {
         try {
-          const res = await axios.get('/auth/status', { params: { locationId: urlLocationId } });
+          const res = await axios.get('/auth/status', { params: { locationId: locationId.value } });
           installed.value = res.data.installed;
         } catch (_) {
           // Ignore — will use demo mode
