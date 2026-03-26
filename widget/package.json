@@ -12,6 +12,6 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.2.8"
+    "@fontsource-variable/geist": "^5.2.8"
   }
 }
